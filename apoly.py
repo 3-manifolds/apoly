@@ -47,6 +47,7 @@ class Point:
         return str(self.Z)
 
     def __eq__(self, other):
+        # NOTE: For knot 9_30 the fibers only matched to 1.9E-8
         return norm(self.Z - other.Z) < 1.0E-10
 
     def __xor__(self, other):
@@ -132,9 +133,11 @@ class PHCFibrator:
         begin = time.time()
         self.base_system = self.psystem.start(self.basepoint)
         print 'done. (%s seconds)'%(time.time() - begin)
+        self.base_fiber = Fiber(self.basepoint,
+                                 self.base_system)
 
     def __len__(self):
-        return len(self.start_fiber)
+        return len(self.base_fiber.solutions)
     
     def rect_to_PHC(self, eqn, rhs=None):
         A, B, c = eqn
@@ -155,6 +158,10 @@ class PHCFibrator:
                 left += ['Y%s'%n]*b
             else:
                 right += ['Y%s'%n]*(-b)
+        if len(left) == 0:
+            left = ['1']
+        if len(right) == 0:
+            right = ['1']
         op = ' - ' if c == 1 else ' + '
         return '*'.join(left) + op + '*'.join(right)
 
@@ -194,8 +201,7 @@ class Holonomizer:
         self.radius = radius
         self.fibrator = PHCFibrator(manifold_name, radius=radius)
         self.manifold = manifold = self.fibrator.manifold
-        self.base_fiber = Fiber(self.fibrator.basepoint,
-                                 self.fibrator.base_system)
+        self.base_fiber = self.fibrator.base_fiber
         self.degree = len(self.base_fiber)
         # pre-initialize
         self.R_fibers = range(order)
@@ -213,8 +219,9 @@ class Holonomizer:
         self.track_satellite()
         print 'Tightening things up ...'
         self.tighten()
-        print 'Computing longitude eigenvalues'
-        self.build_longitude_data()
+        print 'Computing longitude holonomies and eigenvalues'
+        self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
+        self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
         
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
@@ -271,13 +278,13 @@ class Holonomizer:
             print array(self.last_fiber.points)
             print array(self.fibers[0].points)
 
-    def build_longitude_data(self):    
-        self.longitude_holonomies = [
-            [self.L_holo(f.points[n].Z) for f in self.R_fibers]
+    def longitude_data(self, fiber_list):    
+        longitude_holonomies = [
+            [self.L_holo(f.points[n].Z) for f in fiber_list]
             for n in xrange(self.degree)]
-        longitude_traces = self.find_longitude_traces()
-        self.longitude_eigenvalues = []
-        for n, L in enumerate(self.longitude_holonomies):
+        longitude_traces = self.find_longitude_traces(fiber_list[0])
+        longitude_eigenvalues = []
+        for n, L in enumerate(longitude_holonomies):
             tr = longitude_traces[n]
             E = []
             e = sqrt(L[0])
@@ -285,12 +292,13 @@ class Holonomizer:
             for n, H in enumerate(L, 1):
                 e = sqrt(H)
                 E.append(e if abs(e - E[n-1]) < abs(e + E[n-1]) else -e )
-            self.longitude_eigenvalues.append(E)
-                
-    def find_longitude_traces(self, N=0):
+            longitude_eigenvalues.append(E)
+        return longitude_holonomies, longitude_eigenvalues
+    
+    def find_longitude_traces(self, fiber):
         trace = lambda rep : rep[0,0] + rep[1,1]
         traces = []
-        for point in self.fibers[N].points:
+        for point in fiber.points:
             #  I had to move the dehn_fill((0,0)) inside the loop to get this to
             #  work correctly when there is a denominator, e.g. for 8_17.
             #  The values of the longitude traces were coming out wrong.
