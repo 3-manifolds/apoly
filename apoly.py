@@ -54,15 +54,15 @@ class Point:
         return norm(self.Z - other.Z)
     
 class Fiber:
-    def __init__(self, H_meridian, system):
+    def __init__(self, H_meridian, system, tolerance=1.0E-06):
         """
         A fiber for the rational function [holonomy of the meridian].
-        Manages a solved PHCSytem.
+        Manages a single solved PHCSytem.
         """
         self.H_meridian = H_meridian
         self.system = system
         N = system.num_variables()/2
-        self.solutions = system.solution_list()
+        self.solutions = system.solution_list(tolerance=tolerance)
         # only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
 
@@ -131,7 +131,7 @@ class PHCFibrator:
             )
         print 'Computing the starting fiber ... ',
         begin = time.time()
-        self.base_system = self.psystem.start(self.basepoint)
+        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
         print 'done. (%s seconds)'%(time.time() - begin)
         self.base_fiber = Fiber(self.basepoint,
                                  self.base_system)
@@ -196,12 +196,18 @@ class PHCFibrator:
         return Fiber(target_holonomy, target_system)
     
 class Holonomizer:
+    """
+    A family of fibers for the meridian holonomy map, lying
+    above the Nth roots of unity on the unit circle.  (N=128 by default.)
+    """
     def __init__(self, manifold_name, order=128, radius=1.02):
         self.order = order
         self.radius = radius
         self.fibrator = PHCFibrator(manifold_name, radius=radius)
         self.manifold = manifold = self.fibrator.manifold
         self.base_fiber = self.fibrator.base_fiber
+        if not self.base_fiber.is_finite():
+            raise RuntimeError, 'Starting fiber contains ideal points.'
         self.degree = len(self.base_fiber)
         # pre-initialize
         self.R_fibers = range(order)
@@ -220,9 +226,12 @@ class Holonomizer:
         print 'Tightening things up ...'
         self.tighten()
         print 'Computing longitude holonomies and eigenvalues'
-        self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
-        self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
-        
+        try:
+            self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
+            self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
+        except:
+            print 'Failed'
+            
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
 
@@ -237,22 +246,16 @@ class Holonomizer:
         for n in xrange(base_index+1, self.order):
             print n,
             sys.stdout.flush()
-            # Sometimes the PHC homotopy goes to infinity
-            while True:
-                self.R_fibers[n] = F = self.fibrator.transport(
-                    self.R_fibers[n-1], circle[n])
-                if F.is_finite():
-                    break
+            self.R_fibers[n] = F = self.fibrator.transport(
+                self.R_fibers[n-1], circle[n])
+            if not F.is_finite():
                 print '**',
         for n in xrange(base_index-1, -1, -1):
             print n,
             sys.stdout.flush()
-            # Sometimes the PHC homotopy goes to infinity
-            while True:
-                self.R_fibers[n] = F = self.fibrator.transport(
-                    self.R_fibers[n+1], circle[n])
-                if F.is_finite():
-                    break
+            self.R_fibers[n] = F = self.fibrator.transport(
+                self.R_fibers[n+1], circle[n])
+            if not F.is_finite():
                 print '**',
         print
         self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
