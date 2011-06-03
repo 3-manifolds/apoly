@@ -61,7 +61,7 @@ class Fiber:
         """
         self.H_meridian = H_meridian
         self.system = system
-        N = system.num_variables()/2
+        N = system.num_variables()/3
         self.solutions = system.solution_list(tolerance=tolerance)
         # only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
@@ -119,22 +119,25 @@ class PHCFibrator:
         self.radius = radius
         self.manifold = Manifold(self.mfld_name)
         self.num_tetrahedra = N = self.manifold.num_tetrahedra()
-        variables = ['X%s'%n for n in range(N)] + ['Y%s'%n for n in range(N)]
+        variables = ( ['X%s'%n for n in range(N)] +
+                      ['Y%s'%n for n in range(N)] +
+                      ['Z%s'%n for n in range(N)] )
         self.ring = PolyRing(variables + ['t'])
         self.basepoint = radius*exp(2*pi*1j*random())
         self.equations = self.build_equations()
+        self.equations += ['X%s*Y%s*Z%s - 1'%(n,n,n) for n in range(N)]
         self.equations += ['X%s + Y%s - 1'%(n,n) for n in range(N)] 
         self.psystem = ParametrizedSystem(
             self.ring,
             't',
             [PHCPoly(self.ring, e) for e in self.equations]
             )
-        print 'Computing the starting fiber ... ',
-        begin = time.time()
-        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
-        print 'done. (%s seconds)'%(time.time() - begin)
-        self.base_fiber = Fiber(self.basepoint,
-                                 self.base_system)
+        #print 'Computing the starting fiber ... ',
+        #begin = time.time()
+        #self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
+        #print 'done. (%s seconds)'%(time.time() - begin)
+        #self.base_fiber = Fiber(self.basepoint,
+        #                         self.base_system)
 
     def __len__(self):
         return len(self.base_fiber.solutions)
