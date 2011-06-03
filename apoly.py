@@ -132,12 +132,12 @@ class PHCFibrator:
             't',
             [PHCPoly(self.ring, e) for e in self.equations]
             )
-        #print 'Computing the starting fiber ... ',
-        #begin = time.time()
-        #self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
-        #print 'done. (%s seconds)'%(time.time() - begin)
-        #self.base_fiber = Fiber(self.basepoint,
-        #                         self.base_system)
+        print 'Computing the starting fiber ... ',
+        begin = time.time()
+        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
+        print 'done. (%s seconds)'%(time.time() - begin)
+        self.base_fiber = Fiber(self.basepoint,
+                                 self.base_system)
 
     def __len__(self):
         return len(self.base_fiber.solutions)
