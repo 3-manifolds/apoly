@@ -61,7 +61,7 @@ class Fiber:
         """
         self.H_meridian = H_meridian
         self.system = system
-        N = system.num_variables()/3
+        N = system.num_variables()/2
         self.solutions = system.solution_list(tolerance=tolerance)
         # only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
@@ -120,12 +120,10 @@ class PHCFibrator:
         self.manifold = Manifold(self.mfld_name)
         self.num_tetrahedra = N = self.manifold.num_tetrahedra()
         variables = ( ['X%s'%n for n in range(N)] +
-                      ['Y%s'%n for n in range(N)] +
-                      ['Z%s'%n for n in range(N)] )
+                      ['Y%s'%n for n in range(N)] )
         self.ring = PolyRing(variables + ['t'])
         self.basepoint = radius*exp(2*pi*1j*random())
         self.equations = self.build_equations()
-        self.equations += ['X%s*Y%s*Z%s - 1'%(n,n,n) for n in range(N)]
         self.equations += ['X%s + Y%s - 1'%(n,n) for n in range(N)] 
         self.psystem = ParametrizedSystem(
             self.ring,
@@ -268,21 +266,15 @@ class Holonomizer:
             print array(self.last_R_fiber.points)
             print array(self.R_fibers[0].points)
 
-    def tighten(self):
+    def tighten(self, T=1.0):
         Darg = 2*pi/self.order
-        self.circle = circle = [exp(n*Darg*1j) for n in range(self.order)]
+        self.circle = circle = [T*exp(n*Darg*1j) for n in range(self.order)]
         for n in xrange(self.order):
             print n,
             sys.stdout.flush()
             self.fibers[n] = self.fibrator.transport(self.R_fibers[n],
                                                      circle[n])
         print
-        self.last_fiber = self.fibrator.transport(self.R_fibers[-1],
-                                                  self.circle[0])
-        if not self.last_fiber == self.fibers[0]:
-            print 'Lifts did not close up'
-            print array(self.last_fiber.points)
-            print array(self.fibers[0].points)
 
     def longitude_data(self, fiber_list):    
         longitude_holonomies = [
