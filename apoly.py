@@ -61,8 +61,12 @@ class Fiber:
         """
         self.H_meridian = H_meridian
         self.system = system
-        N = system.num_variables()/2
-        self.solutions = system.solution_list(tolerance=tolerance)
+        self.tolerance = tolerance
+        self.extract_info()
+        
+    def extract_info(self):
+        N = self.system.num_variables()/2
+        self.solutions = self.system.solution_list(tolerance=self.tolerance)
         # only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
 
@@ -109,6 +113,10 @@ class Fiber:
     def residuals(self):
         for n, s in enumerate(self.solutions):
             print n, s.res 
+
+    def polish(self):
+        self.system.polish()
+        self.extract_info()
 
 class PHCFibrator:
     """
