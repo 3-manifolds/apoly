@@ -269,10 +269,15 @@ class Holonomizer:
         print
         self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
                                                     self.R_fibers[0].H_meridian)
-        if not self.last_R_fiber == self.R_fibers[0]:
-            print 'Lifts did not close up'
-            print array(self.last_R_fiber.points)
-            print array(self.R_fibers[0].points)
+        missed = self.R_fibers[0].system.absorb(self.last_R_fiber.system)
+        if missed:
+            print '%s new solutions found by holonomy'%missed
+#        if not self.last_R_fiber == self.R_fibers[0]:
+#            print 'Lifts did not close up'
+        print 'New solutions found:'
+        for p in self.last_R_fiber.points:
+            if min([p^q for q in self.R_fibers[0].points]) > 1.0E-6:
+                print p
 
     def tighten(self, T=1.0):
         Darg = 2*pi/self.order
