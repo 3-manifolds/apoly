@@ -1,7 +1,8 @@
 from numpy import array, matrix, dot, prod, diag, transpose, zeros, ones
-from numpy import log, exp, pi, sqrt
+from numpy import log, exp, pi, sqrt, ceil
+from numpy import dtype, complex128, float64, take, arange, where
 from numpy.linalg import svd, norm
-from numpy import dtype, complex128, float64
+from numpy.fft import ifft
 try:
     from numpy import complex256 as big_complex
     from numpy import float128 as big_float
@@ -66,7 +67,7 @@ class Fiber:
         
     def extract_info(self):
         N = self.system.num_variables()/2
-        self.solutions = self.system.solution_list(tolerance=self.tolerance)
+        self.solutions = self.system.solution_list()
         # only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
 
@@ -140,7 +141,7 @@ class PHCFibrator:
             )
         print 'Computing the starting fiber ... ',
         begin = time.time()
-        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-05)
+        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-06)
         print 'done. (%s seconds)'%(time.time() - begin)
         self.base_fiber = Fiber(self.basepoint,
                                  self.base_system)
@@ -247,6 +248,7 @@ class Holonomizer:
     def track_satellite(self):
         arg = log(self.base_fiber.H_meridian).imag%(2*pi)
         R = self.fibrator.radius
+        # This is inconsistent with the sign in numpy.fft
         Darg = 2*pi/self.order
         self.base_index = base_index = int(arg/Darg)
         self.R_circle = circle = [R*exp(n*Darg*1j) for n in range(self.order)]
@@ -269,10 +271,16 @@ class Holonomizer:
         print
         self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
                                                     self.R_fibers[0].H_meridian)
+        print 'Polishing ends ...'
+        self.R_fibers[0].polish()
+        self.last_R_fiber.polish()
+        print 'Checking completeness ... ',
         if not self.last_R_fiber == self.R_fibers[0]:
-            print 'Lifts did not close up'
+            print 'lifts did not close up!'
             print array(self.last_R_fiber.points)
             print array(self.R_fibers[0].points)
+        else:
+            print 'OK'
 
     def tighten(self, T=1.0):
         Darg = 2*pi/self.order
@@ -284,7 +292,7 @@ class Holonomizer:
                                                      circle[n])
         print
 
-    def longitude_data(self, fiber_list):    
+    def longitude_data(self, fiber_list):
         longitude_holonomies = [
             [self.L_holo(f.points[n].Z) for f in fiber_list]
             for n in xrange(self.degree)]
@@ -295,9 +303,9 @@ class Holonomizer:
             E = []
             e = sqrt(L[0])
             E.append(e if abs(e + 1/e - tr) < abs(e + 1/e + tr) else -e ) 
-            for n, H in enumerate(L, 1):
+            for m, H in enumerate(L[1:],1):
                 e = sqrt(H)
-                E.append(e if abs(e - E[n-1]) < abs(e + E[n-1]) else -e )
+                E.append(e if abs(e - E[m-1]) < abs(e + E[m-1]) else -e )
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
     
@@ -479,6 +487,520 @@ def solve_mod2_system(the_matrix,rhs):
         S[j] = (A[R[i]][N] - dot(A[R[i]][j+1:-1], S[j+1:]))%2
         i -= 1
     return S
+
+class Apoly:
+    """
+    The A-polynomial of a SnapPea manifold.  
+
+    Constructor: Apoly(mfld_name, fft_size=128, gluing_form=False, denom=None, multi=False)
+    <mfld_name>      is a manifold name recognized by SnapPy.
+    <gluing_form>    (True/False) indicates whether to find a "standard"
+                     A-polynomial, or the gluing variety variant.
+    <fft_size>       must be at least twice the M-degree.  Try doubling this
+                     if the coefficients seem to be wrapping.
+    <denom>          Denominator for leading coefficient.  This should be
+                     a string, representing a polynomial expression in M.
+    <multi>          If true, multiple copies of lifts are not removed, so
+                     multiplicities of factors of the polynomial are computed. 
+
+  Methods:
+    An Apoly object A is callable:  A(x,y) returns the value at (x,y).
+    A.as_polynomial() returns a string suitable for input to a symbolic
+                      algebra program.
+    A.show_lifts() uses gnuplot to graph the L-projections of components of
+                   the inverse image of a circle in the M-plane.  The circle
+                   is centered at the origin and the radius is as specified.
+    A.show_newton(text=False) shows the newton polygon with dots.  The text
+                              flag shows the coefficients.
+    A.boundary_slopes() prints the boundary slopes detected by the character
+                        variety.
+    A.save(basename=None, dir='polys', with_hint=True, twist=0)
+                     Saves the polynomial in a .apoly or .gpoly text file for
+                     input to a symbolic computation program.  The directory
+                     can be overridden by specifying dir. Saves the parameters
+                     in a .hint file unless with_hint==False.  Assumes that the
+                     preferred longitude is LM^twist, where L,M are the SnapPea
+                     meridian and longitued
+    A.verify() runs various consistency checks on the polynomial.
+
+    An Apoly object prints itself as a matrix of coefficients.
+
+  """
+
+    def __init__(self, mfld_name, fft_size=128, gluing_form=False,
+                 denom=None, multi=False):
+        self.mfld_name = mfld_name
+        self.gluing_form = gluing_form
+        options = {'fft_size'    : fft_size,
+                   'denom'       : denom,
+                   'multi'       : multi}
+#        if (fft_size, radius, denom, multi) == (128, None, None, False):
+#            print "Checking for hints ...",
+#            hintfile = os.path.join(self.hint_dir, mfld_name+'.hint')
+#            if os.path.exists(hintfile):
+#                print "yes!" 
+#                exec(open(hintfile).read())
+#                options.update(hint)
+#            else:
+#                print "nope."
+        self.fft_size = options['fft_size']
+        self.denom = options['denom']
+        self.multi = options['multi']
+        # Could add an option for controlling satellite radius
+        self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size)
+        # This is the tightened radius -- 1.0 for now
+        self.radius = 1.0
+        roots = [array(x) for x in self.holonomizer.longitude_evs]
+        self.sampled_coeffs = self.symmetric_funcs(roots)
+        if self.denom:
+            # THIS IS BROKEN
+            # need Msamples = XXXX (clockwise) 
+            M = self.Msamples
+            exec('D = %s'%self.denom)
+            self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
+        else:
+            self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
+        self.shift = self.find_shift(self.raw_coeffs)
+        if self.radius != 1.0:
+            renorm = self.radius**(-array(range(self.fft_size - self.shift)
+                                          + range(-self.shift, 0)))
+            self.float_coeffs = renorm*self.raw_coeffs
+        else:
+            self.float_coeffs = self.raw_coeffs
+        int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
+        self.height = max([max(abs(x)) for x in int_coeffs])
+        if self.height > float(2**52):
+            print "Coefficients overflowed."
+        C = int_coeffs.transpose()
+        coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
+        rows, cols = coefficient_array.shape
+        while rows:
+            if max(abs(coefficient_array[rows-1])) > 0:
+                break
+            rows -= 1
+        self.coefficients = coefficient_array[:rows]
+        ### FIX ME - does not work if multi==True
+        if self.multi == False:
+            self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
+        self.noise = [max(abs(self.float_coeffs[i] - int_coeffs[i])) for
+                      i in range(len(self.float_coeffs))]
+        print "Noise levels: "
+        for level in self.noise:
+            print level
+            
+    def __call__(self, M, L):
+        result = 0
+        rows, cols = self.coefficients.shape
+        for i in range(rows):
+            Lresult = 0
+            for j in range(cols):
+                Lresult = Lresult*L + self.coefficients[-1-i][-1-j]
+            result = result*M + Lresult
+        return result
+    
+    def __repr__(self):
+        digits = 2 + int(ceil(log(self.height)/log(10)))
+        width = len(self.coefficients[0])
+        format = '[' + ('%' + str(digits) + '.0f')*width + ']\n'
+        result = ''
+        for row in self.coefficients:
+            result += format%tuple(row + 0.)
+        return result
+
+    def help(self):
+        print self.__doc__
+
+    def symmetric_funcs(self, roots):
+        coeffs = [0, ones(roots[0].shape,'D')]
+        for root in roots:
+            for i in range(1, len(coeffs)):
+                coeffs[-i] = -root*coeffs[-i] + coeffs[-1-i]
+            coeffs.append(ones(roots[0].shape,'D'))
+        return coeffs[1:]
+
+    def find_shift(self, raw_coeffs):
+       rows, cols = raw_coeffs.shape
+       N = self.fft_size
+       shifts = [0]
+       renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       coeffs = raw_coeffs*renorm
+       for i in range(rows):
+          for j in range(1, 1+ cols/2):
+             if abs(abs(coeffs[i][-j]) - 1.) < .001:
+                 shifts.append(j)
+       print 'shifts: ', shifts
+       return max(shifts)
+    
+    def monomials(self):
+        rows, cols = self.coefficients.shape
+        monomials = []
+        for j in range(cols):
+            for i in range(rows):
+                if self.gluing_form:
+                    m,n = 2*i, 2*j
+                else:
+                    m,n = 2*i, j
+                a = int(self.coefficients[i][j])
+                if a != 0:
+                    if i > 0:
+                        if j > 0:
+                            monomial = '%d*(M^%d)*(L^%d)'%(a,m,n)
+                        else:
+                            monomial = '%d*(M^%d)'%(a,m)
+                    else:
+                        if j > 0:
+                            monomial = '%d*(L^%d)'%(a,n)
+                        else:
+                            monomial = '%d'%a
+                    monomials.append(monomial)
+        return monomials
+
+    def break_line(self, line):
+        marks = [0]
+        start = 60
+        while True:
+            mark = line.find('+', start)
+            if mark == -1:
+                break
+            marks.append(mark)
+            start = mark+60
+        lines = []
+        for i in range(len(marks) - 1):
+            lines.append(line[marks[i]:marks[i+1]])
+        lines.append(line[marks[-1]:])
+        return '\n    '.join(lines)
+    
+    def as_polynomial(self):
+        polynomial = ('+'.join(self.monomials())).replace('+-','-')
+        return polynomial
+
+    def as_Lpolynomial(self, name='A', twist=0):
+        terms = []
+        rows, cols = self.coefficients.shape
+        #We are taking the true longitude to be L*M^twist.
+        #So we change variables by L -> M^(-twist)*L.
+        #Then renormalize so the minimal power of M is 0.
+        minexp = 2*rows
+        for j in range(cols):
+            for i in range(rows):
+                if self.coefficients[i][j]:
+                    break
+            minexp = min(2*i - j*twist, minexp)
+        for j in range(cols):
+            if self.gluing_form:
+                n = 2*j
+            else:
+                n = j
+            monomials = []
+            for i in range(rows):
+                m = 2*i
+                a = int(self.coefficients[i][j])
+                if a != 0:
+                    if i > 0:
+                        monomial = '%d*M^%d'%(a,m)
+                    else:
+                        monomial = '%d'%a
+                    monomials.append(monomial.replace('^1 ',' '))
+            if monomials:
+                p = - n*twist - minexp
+                if p:
+                    P = '%d'%p
+                    if p < 0:
+                        P = '('+P+')'
+                    if n > 0:
+                        term = '+ (L^%d*M^%s)*('%(n,P) + ' + '.join(monomials) + ')'
+                    else:
+                        term = '(M^%s)*('%P + ' + '.join(monomials) + ')'
+                else:
+                    if n > 0:
+                        term = '+ (L^%d)*('%n + ' + '.join(monomials) + ')'
+                    else:
+                        term = '(' + ' + '.join(monomials) + ')'
+                term = self.break_line(term)
+                terms.append(term.replace('+ -','- '))
+        return name + ' :=\n' + '\n'.join(terms)
+
+    def save(self, basename=None, dir=None, with_hint=True, twist=0):
+        if dir == None:
+            if self.gluing_form:
+                poly_dir = self.gpoly_dir
+                hint_dir = self.hint_dir
+                ext = '.gpoly'
+            else:
+                poly_dir = self.apoly_dir
+                hint_dir = self.hint_dir
+                ext = '.apoly'
+        for dir in (poly_dir, hint_dir):
+            if not os.path.exists(dir):
+                cwd = os.path.abspath(os.path.curdir)
+                newdir = os.path.join(cwd,dir)
+                response = raw_input("May I create a directory %s?(y/n)"%newdir)
+                if response.lower()[0] != 'y':
+                    sys.exit(0)
+                os.mkdir(newdir)
+        if basename == None:
+            basename = self.mfld_name
+        polyfile_name = os.path.join(poly_dir, basename + ext)
+        hintfile_name = os.path.join(hint_dir, basename + '.hint')
+        polyfile = open(polyfile_name,'w')
+        if self.gluing_form:
+            lhs = 'G_%s'%basename
+        else:
+            lhs = 'A_%s'%basename
+        polyfile.write(self.as_Lpolynomial(name=lhs, twist=twist))
+        polyfile.write(';\n')
+        polyfile.close()
+        if with_hint:
+            hintfile = open(hintfile_name,'w')
+            hintfile.write('hint={\n')
+            hintfile.write('"radius" : %f,\n'%self.lift.radius)
+            hintfile.write('"fft_size" : %d,\n'%self.lift.fft_size)
+            if not self.lift.multi:
+                hintfile.write('"multi" : %s,\n'%self.lift.multi)
+            if self.denom:
+                hintfile.write('"denom" : "%s",\n'%self.denom)
+            hintfile.write('}\n')
+            hintfile.close()
+            
+    def boundary_slopes(self):
+        print self.newton_polygon.slopes
+        
+    def show_lifts(self):
+        self.lift.plot()
+
+    def show_newton(self, text=False):
+        V = Polyview(self.coefficients, self.gluing_form)
+        V.show_sides()
+        if text:
+            V.show_text()
+        else:
+            V.show_dots()
+
+    def show_volumes(self):
+        Plot(self.lift.volumes)
+
+    def show_outer_volumes(self):
+        Plot(self.lift.outer_volumes)
+
+    def show_logabsL(self):
+        Plot([log(abs(x)) for x in self.lift.Lsamples])
+
+    def verify(self):
+        result = True
+        sign = None
+        print 'Checking noise level ...',
+        print max(self.noise)
+        if max(self.noise) > .3:
+            result = False
+            print 'Failed'
+        print 'Checking for reciprocal symmetry ... ',
+        maxgap = 0
+        if max(abs(self.coefficients[0] - self.coefficients[-1][-1::-1]))==0:
+            sign = -1.0
+        elif max(abs(self.coefficients[0] + self.coefficients[-1][-1::-1]))==0:
+            sign = 1.0
+        else:
+            print 'Failed!'
+            result = False
+        if sign:
+            for i in range(len(self.coefficients)):
+                maxgap = max(abs(self.coefficients[i] +
+                              sign*self.coefficients[-i-1][-1::-1]))
+                if maxgap > 0:
+                    print 'Failed! gap = %d'%maxgap
+                    result = False
+        if result:
+            print 'Passed!'
+        return result
+
+class Slope:
+      def __init__(self, xy, gluing_form=True):
+            x, y = xy
+            if gluing_form == False:
+                  y *= 2
+            if x == 0:
+                  if y == 0:
+                        raise ValueError, "gcd(0,0) is undefined."
+                  else:
+                        gcd = abs(y)
+            else:
+                  x0 = abs(x)
+                  y0 = abs(y)
+                  while y0 != 0:
+                        r = x0%y0
+                        x0 = y0
+                        y0 = r
+                  gcd = x0
+            if x < 0:
+                  x, y = -x, -y
+            self.x = x/gcd
+            self.y = y/gcd
+      def __cmp__(self, other):
+            return int.__cmp__(self.y*other.x - other.y*self.x, 0)
+      def __repr__(self):
+            return '%d/%d'%(self.y, self.x)
+
+class NewtonPolygon:
+      def __init__(self, coeff_array, gluing_form):
+          self.rows, self.columns = coeff_array.shape
+          self.coefficients = coeff_array
+          self.gluing_form = gluing_form
+          self.slopes=[]
+          self.find_vertices()
+            
+      def find_vertices(self):
+            tops = []
+            bottoms = []
+            for j in range(self.columns):
+                  nonzero = where(self.coefficients[:,j],1,0).tolist()
+                  try:
+                        bottom = nonzero.index(1)
+                        nonzero.reverse()
+                        top = len(nonzero) - nonzero.index(1) - 1
+                  except ValueError:
+                        top = None
+                        bottom = None
+                  tops.append(top)
+                  bottoms.append(bottom)
+            if tops[0] != bottoms[0]:
+                  self.slopes.append(Slope((0,1)))
+            self.top_vertices = [(tops[0],0)]
+            last_vertex = max = 0
+            while last_vertex < self.columns - 1:
+                  slope = (0,-1)
+                  x,y = self.top_vertices[-1]
+                  for j in range(last_vertex+1, self.columns):
+                        if tops[j] == None:
+                              continue
+                        newslope =  (j - y, tops[j] - x)
+                        if newslope[1]*slope[0] >= newslope[0]*slope[1]:
+                              max = j
+                              slope=newslope
+                  self.top_vertices.append((tops[max], max))
+                  s = Slope(slope, self.gluing_form)
+                  if not s in self.slopes:
+                        self.slopes.append(s)
+                  last_vertex = max
+            self.bottom_vertices = [(bottoms[0],0)]
+            last_vertex = min = 0
+            while last_vertex < self.columns - 1:
+                  slope = (0,1)
+                  x,y = self.bottom_vertices[-1]
+                  for j in range(last_vertex+1, self.columns):
+                        if bottoms[j] == None:
+                              continue
+                        newslope =  (j - y, bottoms[j] - x)
+                        if newslope[1]*slope[0] <= newslope[0]*slope[1]:
+                              min = j
+                              slope=newslope
+                  self.bottom_vertices.append((bottoms[min], min))
+                  s = Slope(slope, self.gluing_form)
+                  if not s in self.slopes:
+                        self.slopes.append(s)
+                  last_vertex = min
+            self.bottom_vertices.reverse()
+         
+class Polyview(NewtonPolygon):
+      def __init__(self, coeff_array, gluing_form=True, scale=None, margin=50):
+          self.rows, self.columns = coeff_array.shape
+          self.gluing_form = gluing_form
+          if scale == None:
+                scale = 600/max(coeff_array.shape)
+          self.scale = scale
+          self.margin = margin
+          self.width = (self.columns - 1)*self.scale + 2*self.margin
+          self.height = (self.rows - 1)*self.scale + 2*self.margin
+          self.window = Tkinter.Tk()
+          self.window.wm_geometry('+400+20')
+          self.coefficients = coeff_array
+          self.slopes=[]
+          self.find_vertices()
+          self.canvas = Tkinter.Canvas(self.window,
+                                  bg='white',
+                                  height=self.height,
+                                  width=self.width)
+          self.canvas.pack()
+          self.font = ('Helvetica','16','bold')
+          self.dots=[]
+          self.text=[]
+          self.sides=[]
+
+          self.grid = (
+              [ self.canvas.create_line(
+              0, self.height - self.margin - i*scale,
+              self.width, self.height - self.margin - i*scale,
+              fill=self.gridfill(i))
+                        for i in range(self.rows)] +
+              [ self.canvas.create_line(
+              self.margin + i*scale, 0,
+              self.margin + i*scale, self.height,
+              fill=self.gridfill(i))
+                        for i in range(self.columns)])
+#          self.window.mainloop()
+
+      def write_psfile(self, filename):
+            self.canvas.postscript(file=filename)
+            
+      def gridfill(self, i):
+          if i:
+              return '#f0f0f0'
+          else:
+              return '#d0d0d0'
+          
+      def point(self, pair):
+          i,j = pair
+          return (self.margin+j*self.scale,
+                  self.height - self.margin - i*self.scale)
+      
+      def show_dots(self):
+          r = 1 + self.scale/20
+          for i in range(self.rows):
+              for j in range(self.columns):
+                  if self.coefficients[i][j] != 0:
+                      x,y = self.point((i,j))
+                      self.dots.append(self.canvas.create_oval(
+                          x-r, y-r, x+r, y+r, fill='black'))
+
+      def erase_dots(self):
+          for dot in self.dots:
+              self.canvas.delete(dot)
+          self.dots = []
+
+      def show_text(self):
+          for i in range(self.rows):
+              for j in range(self.columns):
+                  if self.coefficients[i][j] == 0:
+                      continue
+                  x,y = self.point((i,j))
+                  self.text.append(self.canvas.create_text(
+                          x,y,
+                          text=str(self.coefficients[i][j]),
+                          font=self.font,
+                          anchor='c'))
+      def erase_text(self):
+            for coeff in self.text:
+                  self.canvas.delete(coeff)
+            self.text=[]
+
+      def show_sides(self):
+            r = 2 + self.scale/20
+            first = self.top_vertices[0]
+            x1, y1 = self.point(first)
+            vertices = self.top_vertices + self.bottom_vertices + [first]
+            for vertex in vertices:
+                  self.sides.append(self.canvas.create_oval(
+                        x1-r, y1-r, x1+r, y1+r, fill='red'))
+                  x2, y2 = self.point(vertex)
+                  self.sides.append(self.canvas.create_line(
+                        x1, y1, x2, y2,
+                        fill='red'))
+                  x1, y1 = x2, y2
+
+      def erase_sides(self):
+            for object in self.sides:
+                  self.canvas.delete(object)
+            self.sides=[]
+
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
