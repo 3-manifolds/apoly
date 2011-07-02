@@ -1,4 +1,4 @@
-from numpy import array, matrix, dot, prod, diag, transpose, zeros, ones
+from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, complex128, float64, take, arange, where
 from numpy.linalg import svd, norm
@@ -13,7 +13,7 @@ from phc import *
 from snappy import *
 from random import random
 from subprocess import Popen, PIPE
-import time, sys
+import time, sys, os
 
 
 DTYPE = dtype('c16')
@@ -53,6 +53,11 @@ class Point:
 
     def __xor__(self, other):
         return norm(self.Z - other.Z)
+
+    def is_degenerate(self):
+        return (min(abs(self.Z)) < 1.0E-6
+                or min(abs(self.Z - 1.0)) < 1.0E-6
+                or max(abs(self.Z)) > 1.0E6)
     
 class Fiber:
     def __init__(self, H_meridian, system, tolerance=1.0E-06):
@@ -119,6 +124,13 @@ class Fiber:
         self.system.polish()
         self.extract_info()
 
+    def Tillmann_points(self):
+        result = []
+        for n, s in enumerate(self.solutions):
+            if (s.t != 1.0 or self.points[n].is_degenerate()):
+                result.append(n)
+        return result
+    
 class PHCFibrator:
     """
     A factory for fibers computed by PHC.
@@ -210,9 +222,10 @@ class Holonomizer:
     A family of fibers for the meridian holonomy map, lying
     above the Nth roots of unity on the unit circle.  (N=128 by default.)
     """
-    def __init__(self, manifold_name, order=128, radius=1.02):
+    def __init__(self, manifold_name, order=128, radius=1.02, tight_radius=1.0):
         self.order = order
         self.radius = radius
+        self.tight_radius = tight_radius
         self.fibrator = PHCFibrator(manifold_name, radius=radius)
         self.manifold = manifold = self.fibrator.manifold
         self.base_fiber = self.fibrator.base_fiber
@@ -227,18 +240,20 @@ class Holonomizer:
         eqns = manifold.gluing_equations('rect')
         self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
         self.rhs = [1.0]*(len(eqns) - 3)
-        self.perturbation = 0.1*array([exp(2*pi*1j*random())
-                                          for n in xrange(self.dim - 1)] + [0])
         self.M_holo, self.L_holo = [Glunomial(A,B,c) for A,B,c in eqns[-2:]]
         self.glunomials.append(self.M_holo)
-        print 'Tracking satellite ...'
+        print 'Tracking the satellite ...'
         self.track_satellite()
-        print 'Tightening things up ...'
-        self.tighten()
+#        print 'Tightening the circle ...'
+#        self.tighten()
+#        for n, fiber in enumerate(self.fibers):
+#            t = fiber.Tillmann_points()
+#            if t:
+#                print 'Tillman points %s found in fiber %s.'%(t, n)
         print 'Computing longitude holonomies and eigenvalues'
         try:
             self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
-            self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
+#            self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
         except:
             print 'Failed'
             
@@ -247,18 +262,20 @@ class Holonomizer:
 
     def track_satellite(self):
         arg = log(self.base_fiber.H_meridian).imag%(2*pi)
-        R = self.fibrator.radius
-        # This is inconsistent with the sign in numpy.fft
+        R = self.radius
         Darg = 2*pi/self.order
-        self.base_index = base_index = int(arg/Darg)
-        self.R_circle = circle = [R*exp(n*Darg*1j) for n in range(self.order)]
-        H_base = circle[base_index]
-        self.R_fibers[base_index] = self.base_fiber
+        # This is to be consistent with the sign in numpy.fft
+        self.R_circle = circle = [R*exp(-n*Darg*1j) for n in range(self.order)]
+        self.base_index = base_index = (self.order - int((arg)/Darg))%self.order
+        print base_index,
+        self.R_fibers[base_index] = self.fibrator.transport(
+                self.base_fiber, circle[base_index])
         for n in xrange(base_index+1, self.order):
             print n,
             sys.stdout.flush()
             self.R_fibers[n] = F = self.fibrator.transport(
                 self.R_fibers[n-1], circle[n])
+            self.R_fibers[n].system.polish()
             if not F.is_finite():
                 print '**',
         for n in xrange(base_index-1, -1, -1):
@@ -282,14 +299,15 @@ class Holonomizer:
         else:
             print 'OK'
 
-    def tighten(self, T=1.0):
+    def tighten(self):
+        T = self.tight_radius
         Darg = 2*pi/self.order
-        self.circle = circle = [T*exp(n*Darg*1j) for n in range(self.order)]
+        self.circle = circle = [T*exp(-n*Darg*1j) for n in range(self.order)]
         for n in xrange(self.order):
             print n,
             sys.stdout.flush()
-            self.fibers[n] = self.fibrator.transport(self.R_fibers[n],
-                                                     circle[n])
+            self.fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
+            self.fibers[n].system.polish()
         print
 
     def longitude_data(self, fiber_list):
@@ -408,7 +426,7 @@ class Plot:
     Prompts for which ones to show.
     """
     def __init__(self, data, quiet=False):
-        if isinstance(data[0], list) or isinstance(data[0], array):
+        if isinstance(data[0], list) or isinstance(data[0], ndarray):
             self.data = data
         else:
             self.data =[data]
@@ -528,12 +546,13 @@ class Apoly:
   """
 
     def __init__(self, mfld_name, fft_size=128, gluing_form=False,
-                 denom=None, multi=False):
+                 radius=1.02, denom=None, multi=False):
         self.mfld_name = mfld_name
         self.gluing_form = gluing_form
         options = {'fft_size'    : fft_size,
                    'denom'       : denom,
-                   'multi'       : multi}
+                   'multi'       : multi,
+                   'radius'      : radius}
 #        if (fft_size, radius, denom, multi) == (128, None, None, False):
 #            print "Checking for hints ...",
 #            hintfile = os.path.join(self.hint_dir, mfld_name+'.hint')
@@ -546,11 +565,12 @@ class Apoly:
         self.fft_size = options['fft_size']
         self.denom = options['denom']
         self.multi = options['multi']
+        self.radius = options['radius']
         # Could add an option for controlling satellite radius
-        self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size)
+        self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size,
+                                       radius=self.radius)
         # This is the tightened radius -- 1.0 for now
-        self.radius = 1.0
-        roots = [array(x) for x in self.holonomizer.longitude_evs]
+        roots = [array(x) for x in self.holonomizer.R_longitude_evs]
         self.sampled_coeffs = self.symmetric_funcs(roots)
         if self.denom:
             # THIS IS BROKEN
@@ -579,9 +599,7 @@ class Apoly:
                 break
             rows -= 1
         self.coefficients = coefficient_array[:rows]
-        ### FIX ME - does not work if multi==True
-        if self.multi == False:
-            self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
+        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
         self.noise = [max(abs(self.float_coeffs[i] - int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
         print "Noise levels: "
@@ -622,11 +640,14 @@ class Apoly:
        rows, cols = raw_coeffs.shape
        N = self.fft_size
        shifts = [0]
-       renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       if N%2 == 0:
+           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       else:
+           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
        coeffs = raw_coeffs*renorm
        for i in range(rows):
           for j in range(1, 1+ cols/2):
-             if abs(abs(coeffs[i][-j]) - 1.) < .001:
+             if abs(abs(coeffs[i][-j]) - 1.) < .01:
                  shifts.append(j)
        print 'shifts: ', shifts
        return max(shifts)
@@ -766,6 +787,7 @@ class Apoly:
         print self.newton_polygon.slopes
         
     def show_lifts(self):
+        # broken
         self.lift.plot()
 
     def show_newton(self, text=False):
@@ -858,8 +880,8 @@ class NewtonPolygon:
                         nonzero.reverse()
                         top = len(nonzero) - nonzero.index(1) - 1
                   except ValueError:
-                        top = None
-                        bottom = None
+                        print 'Failed to construct Newton Polygon'
+                        return
                   tops.append(top)
                   bottoms.append(bottom)
             if tops[0] != bottoms[0]:
@@ -871,7 +893,8 @@ class NewtonPolygon:
                   x,y = self.top_vertices[-1]
                   for j in range(last_vertex+1, self.columns):
                         if tops[j] == None:
-                              continue
+                            continue
+                        # Why does this sometimes throw an exception?
                         newslope =  (j - y, tops[j] - x)
                         if newslope[1]*slope[0] >= newslope[0]*slope[1]:
                               max = j
@@ -1001,6 +1024,7 @@ class Polyview(NewtonPolygon):
                   self.canvas.delete(object)
             self.sides=[]
 
+winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
