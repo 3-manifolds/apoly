@@ -13,7 +13,7 @@ from phc import *
 from snappy import *
 from random import random
 from subprocess import Popen, PIPE
-import time, sys, os
+import time, sys, os, Tkinter
 
 
 DTYPE = dtype('c16')
@@ -48,7 +48,6 @@ class Point:
         return str(self.Z)
 
     def __eq__(self, other):
-        # NOTE: For knot 9_30 the fibers only matched to 1.9E-8
         return norm(self.Z - other.Z) < 1.0E-10
 
     def __xor__(self, other):
@@ -73,7 +72,7 @@ class Fiber:
     def extract_info(self):
         N = self.system.num_variables()/2
         self.solutions = self.system.solution_list()
-        # only keep the "X" variables.
+        # We only keep the "X" variables.
         self.points = [Point(S.point[:N]) for S in self.solutions]
 
     def __len__(self):
@@ -106,9 +105,8 @@ class Fiber:
         Check if any cross-ratios are 0 or 1
         """
         for p in self.points:
-            for z in p.Z:
-                if abs(z*(1-z)) < 1.0E-10:
-                    return False
+            if not p.is_degenerate:
+                return False
         return True
             
     def details(self):
@@ -222,10 +220,9 @@ class Holonomizer:
     A family of fibers for the meridian holonomy map, lying
     above the Nth roots of unity on the unit circle.  (N=128 by default.)
     """
-    def __init__(self, manifold_name, order=128, radius=1.02, tight_radius=1.0):
+    def __init__(self, manifold_name, order=128, radius=1.02):
         self.order = order
         self.radius = radius
-        self.tight_radius = tight_radius
         self.fibrator = PHCFibrator(manifold_name, radius=radius)
         self.manifold = manifold = self.fibrator.manifold
         self.base_fiber = self.fibrator.base_fiber
@@ -234,7 +231,7 @@ class Holonomizer:
         self.degree = len(self.base_fiber)
         # pre-initialize
         self.R_fibers = range(order)
-        self.fibers = range(order)
+        self.T_fibers = range(order)
         self.dim = manifold.num_tetrahedra()
         self.rhs = []
         eqns = manifold.gluing_equations('rect')
@@ -242,25 +239,17 @@ class Holonomizer:
         self.rhs = [1.0]*(len(eqns) - 3)
         self.M_holo, self.L_holo = [Glunomial(A,B,c) for A,B,c in eqns[-2:]]
         self.glunomials.append(self.M_holo)
-        print 'Tracking the satellite ...'
         self.track_satellite()
-#        print 'Tightening the circle ...'
-#        self.tighten()
-#        for n, fiber in enumerate(self.fibers):
-#            t = fiber.Tillmann_points()
-#            if t:
-#                print 'Tillman points %s found in fiber %s.'%(t, n)
-        print 'Computing longitude holonomies and eigenvalues'
         try:
             self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
-#            self.longitude_holos, self.longitude_evs = self.longitude_data(self.fibers)
         except:
             print 'Failed'
             
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
 
-    def track_satellite(self):
+    def track_satellite(self): 
+        print 'Tracking the satellite at radius %s ...'%self.radius
         arg = log(self.base_fiber.H_meridian).imag%(2*pi)
         R = self.radius
         Darg = 2*pi/self.order
@@ -288,10 +277,10 @@ class Holonomizer:
         print
         self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
                                                     self.R_fibers[0].H_meridian)
-        print 'Polishing ends ...'
+        print 'Polishing the ends ...'
         self.R_fibers[0].polish()
         self.last_R_fiber.polish()
-        print 'Checking completeness ... ',
+        print 'Checking for completeness ... ',
         if not self.last_R_fiber == self.R_fibers[0]:
             print 'lifts did not close up!'
             print array(self.last_R_fiber.points)
@@ -299,18 +288,24 @@ class Holonomizer:
         else:
             print 'OK'
 
-    def tighten(self):
-        T = self.tight_radius
+    def tighten(self, T=1.0):
+        print 'Tightening the circle to radius %s ...'%T
         Darg = 2*pi/self.order
         self.circle = circle = [T*exp(-n*Darg*1j) for n in range(self.order)]
         for n in xrange(self.order):
             print n,
             sys.stdout.flush()
-            self.fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
-            self.fibers[n].system.polish()
-        print
+            self.T_fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
+            self.T_fibers[n].system.polish()
+        print '\nChecking for Tillmann points.'
+        for n in xrange(self.order):
+            t = self.T_fibers[n].Tillmann_points()
+            if t:
+                print 'Tillman points %s found in fiber %s.'%(t, n)
+        self.longitude_holos, self.longitude_evs = self.longitude_data(self.T_fibers)
 
     def longitude_data(self, fiber_list):
+        print 'Computing longitude holonomies and eigenvalues.'
         longitude_holonomies = [
             [self.L_holo(f.points[n].Z) for f in fiber_list]
             for n in xrange(self.degree)]
@@ -508,7 +503,7 @@ def solve_mod2_system(the_matrix,rhs):
 
 class Apoly:
     """
-    The A-polynomial of a SnapPea manifold.  
+    The A-polynomial of a SnapPy manifold.  
 
     Constructor: Apoly(mfld_name, fft_size=128, gluing_form=False, denom=None, multi=False)
     <mfld_name>      is a manifold name recognized by SnapPy.
@@ -566,32 +561,30 @@ class Apoly:
         self.denom = options['denom']
         self.multi = options['multi']
         self.radius = options['radius']
-        # Could add an option for controlling satellite radius
         self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size,
                                        radius=self.radius)
-        # This is the tightened radius -- 1.0 for now
-        roots = [array(x) for x in self.holonomizer.R_longitude_evs]
-        self.sampled_coeffs = self.symmetric_funcs(roots)
+        evs = [array(x) for x in self.holonomizer.R_longitude_evs]
+        if multi == False:
+            self.multiplicities, evs = self.demultiply(evs)
+        self.sampled_coeffs = self.symmetric_funcs(evs)
         if self.denom:
-            # THIS IS BROKEN
-            # need Msamples = XXXX (clockwise) 
-            M = self.Msamples
+            M = array(self.holonomizer.R_circle)
             exec('D = %s'%self.denom)
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
         self.shift = self.find_shift(self.raw_coeffs)
-        if self.radius != 1.0:
-            renorm = self.radius**(-array(range(self.fft_size - self.shift)
-                                          + range(-self.shift, 0)))
-            self.float_coeffs = renorm*self.raw_coeffs
-        else:
-            self.float_coeffs = self.raw_coeffs
-        int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
-        self.height = max([max(abs(x)) for x in int_coeffs])
+        if self.shift is None:
+            print 'Coefficients seem to be wrapping.  Try a larger fft size.'
+            return
+        renorm = self.radius**(-array(range(self.fft_size - self.shift)
+                                      + range(-self.shift, 0)))
+        self.float_coeffs = renorm*self.raw_coeffs
+        self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
+        self.height = max([max(abs(x)) for x in self.int_coeffs])
         if self.height > float(2**52):
             print "Coefficients overflowed."
-        C = int_coeffs.transpose()
+        C = self.int_coeffs.transpose()
         coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
         rows, cols = coefficient_array.shape
         while rows:
@@ -600,7 +593,7 @@ class Apoly:
             rows -= 1
         self.coefficients = coefficient_array[:rows]
         self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
-        self.noise = [max(abs(self.float_coeffs[i] - int_coeffs[i])) for
+        self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
         print "Noise levels: "
         for level in self.noise:
@@ -636,7 +629,23 @@ class Apoly:
             coeffs.append(ones(roots[0].shape,'D'))
         return coeffs[1:]
 
-    def find_shift(self, raw_coeffs):
+    def demultiply(self, ev_list):
+            multiplicities = []
+            sdr = []
+            multis = [1]*len(ev_list)
+            for i in range(len(ev_list)):
+                unique = True
+                for j in range(i+1,len(ev_list)):
+                    if max(abs(ev_list[i] - ev_list[j])) < 1.0E-6:
+                        unique = False
+                        multis[j] += multis[i]
+                        break
+                if unique:
+                    sdr.append(i)
+                    multiplicities.append((i, multis[i]))
+            return multiplicities, [ev_list[i] for i in sdr]
+
+    def x_find_shift(self, raw_coeffs):
        rows, cols = raw_coeffs.shape
        N = self.fft_size
        shifts = [0]
@@ -647,10 +656,22 @@ class Apoly:
        coeffs = raw_coeffs*renorm
        for i in range(rows):
           for j in range(1, 1+ cols/2):
-             if abs(abs(coeffs[i][-j]) - 1.) < .01:
+             if abs(abs(coeffs[i][-j]) - 1.) < 0.01:
                  shifts.append(j)
        print 'shifts: ', shifts
        return max(shifts)
+
+    def find_shift(self, raw_coeffs):
+       N = self.fft_size
+       if N%2 == 0:
+           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       else:
+           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+       coeffs = raw_coeffs*renorm
+       maxes = [max(abs(row.real)) for row in coeffs.transpose()]
+       for n in range(N):
+           if maxes[-n] < 0.01:
+               return n-1
     
     def monomials(self):
         rows, cols = self.coefficients.shape
@@ -834,6 +855,12 @@ class Apoly:
         if result:
             print 'Passed!'
         return result
+    
+    def tighten(self, T=1.0):
+        self.holonomizer.tighten(T)
+        roots = [array(x) for x in self.holonomizer.longitude_evs]
+        self.T_sampled_coeffs = self.symmetric_funcs(roots)
+        self.T_raw_coeffs = array([ifft(x) for x in self.T_sampled_coeffs])
 
 class Slope:
       def __init__(self, xy, gluing_form=True):
