@@ -229,6 +229,7 @@ class Holonomizer:
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'Starting fiber contains ideal points.'
         self.degree = len(self.base_fiber)
+        self.dimension = manifold.num_tetrahedra()
         # pre-initialize
         self.R_fibers = range(order)
         self.T_fibers = range(order)
@@ -361,116 +362,6 @@ class Holonomizer:
     def jacobian(self, Z):
         return matrix([E.gradient(Z) for E in self.glunomials])
 
-    def newton_step(self, Z, target):
-        U, s, V = svd(self.jacobian(Z))
-        D = matrix(diag(1/s))
-        rhs = transpose(target - self(Z))
-        return s, array(V.H*D*U.H*rhs).T[0]
-
-    def run_newton(self, Z, target, info):
-        delta = self(Z) - target
-        prior_residual = norm(delta)
-        info['residuals'] = residuals = []
-        increments = []
-        singular = []
-        result = None
-        N = 0
-        while True:
-            N += 1
-            singular_values, dZ = self.newton_step(Z, target)
-            min_sing = min(singular_values)
-            singular.append(min_sing)
-            if min_sing < SVT:
-                self.crash_log.append([residuals, increments,
-                                 singular_values, Z,
-                                 backtracks, N])
-                raise Singularity
-            nextZ = Z + dZ
-            residual = norm(self(nextZ) - target)
-            if residual < 0.0001 and residual > prior_residual:
-                residuals.append(residual)
-                return Z
-            norm_dZ = norm(dZ)
-            for backtracks in range(1,33):
-                if residual < 1.0E-15 or norm_dZ < 1.0E-6:
-                    break
-                else:
-                    next_residual = norm(self(Z + 0.5*dZ) - target)
-                    if next_residual > residual:
-                        break
-                    residual = next_residual
-                    dZ *= 0.5
-                    norm_dZ *= 0.5
-                    nextZ = Z + dZ
-            residuals.append(residual)
-            increment = norm(dZ)
-            increments.append( increment )
-            if N >= MAX_STEPS or residual < 1.0E-15:
-                info['increments'] = increments
-                info['singular_values'] = singular
-                info['num_steps'] = N
-                info['backtracks'] = backtracks
-                return nextZ
-            prior_residual = residual
-            Z = nextZ
-
-class Plot:
-    """
-    Uses gnuplot to plot a vector or list of vectors.
-    Assumes that all vectors in the list are the same type (Float or Complex)
-    Prompts for which ones to show.
-    """
-    def __init__(self, data, quiet=False):
-        if isinstance(data[0], list) or isinstance(data[0], ndarray):
-            self.data = data
-        else:
-            self.data =[data]
-        self.type = type(data[0][0])
-        self.gnuplot = Popen(['gnuplot', '-geometry 800x720+200+0'],
-                             shell=True,
-                             stdin=PIPE)
-        self.show_plots(quiet)
-
-    input = raw_input
-    
-    def show_plots(self, quiet):
-        if not quiet:
-            print 'There are %d functions.'%len(self.data)
-        print 'Which ones do you want to see?'
-        while 1:
-            try:
-                stuff = self.input('plot> ')
-                items = stuff.split()
-                if len(items) and items[0] == 'all':
-                    list = range(len(self.data))
-                else:
-                    list = [int(item)%len(self.data) for item in items]
-                if len(list) == 0:
-                    break
-            except ValueError:
-                break
-            print list
-            spec = []
-            for n in list:
-                spec.append('"-" t "%d" w lines'%n)
-            gnuplot_input = 'plot ' + ', '.join(spec) + '\n'
-            if self.type == complex128 or self.type == big_complex:
-                for n in list:
-                    gnuplot_input += '\n'.join([
-                        '%f %f'%(point.real, point.imag)
-                        for point in self.data[n]] + ['e\n']) 
-            elif self.type == float64 or self.type == big_float:
-                    gnuplot_input += '\n'.join(
-                        ['%f'%point for point in self.data[n]] + ['e\n']) 
-            else:
-                print self.type
-                print self.data[0]
-                print "Data must consist of vectors of real or complex numbers."
-                return
-            self.gnuplot.stdin.write(gnuplot_input)
-        #self.gnuplot.close()
-        return
-
 def solve_mod2_system(the_matrix,rhs):
     M,N = the_matrix.shape
     A = zeros((M,N+1),'i')
@@ -501,6 +392,160 @@ def solve_mod2_system(the_matrix,rhs):
         i -= 1
     return S
 
+class PolyRelation:
+    """
+    An integral polynomial relation satisfied by two coordinate
+    functions M and L in the function field of a curve defined over Q.
+    We view M as the "base element".  Then the polynomial relation is
+    just a minimal polynomial for L over Q(M).  (In practice, for
+    function fields of curves of characters, M is the holonomy of the
+    meridian.)
+    """
+    def __init__(self, Lvalues, Mvalues, radius=1.02, fft_size=128,
+                 denom=None, multi=False, gluing_form=False):
+        self.radius = radius
+        self.fft_size = fft_size
+        self.denom = denom
+        self.multi = multi
+        self.gluing_form=False
+        Larrays = [array(x) for x in Lvalues]
+        if multi == False:
+            self.multiplicities, Larrays = self.demultiply(Larrays)
+        self.sampled_coeffs = self.symmetric_funcs(Larrays)
+        if denom:
+            M = array(Mvalues)
+            exec('D = %s'%self.denom) #denom is an expression for a poly in M
+            self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
+        else:
+            self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
+        self.shift = self.find_shift(self.raw_coeffs)
+        if self.shift is None:
+            print 'Coefficients seem to be wrapping.  Try a larger fft size.'
+            return
+        renorm = self.radius**(-array(range(self.fft_size - self.shift)
+                                      + range(-self.shift, 0)))
+        self.float_coeffs = renorm*self.raw_coeffs
+        self.height = max([max(abs(x.real)) for x in self.float_coeffs])
+        # This has problems.
+        if self.height > float(2**52):
+            print "Coefficients overflowed."
+        else:
+            self.height = round(self.height)
+        self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
+        C = self.int_coeffs.transpose()
+        coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
+        rows, cols = coefficient_array.shape
+        while rows:
+            if max(abs(coefficient_array[rows-1])) > 0:
+                break
+            rows -= 1
+        self.coefficients = coefficient_array[:rows]
+        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
+        self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
+                      i in range(len(self.float_coeffs))]
+        print "Noise levels: "
+        for level in self.noise:
+            print level
+            
+    def __call__(self, M, L):
+        result = 0
+        rows, cols = self.coefficients.shape
+        for i in range(rows):
+            Lresult = 0
+            for j in range(cols):
+                Lresult = Lresult*L + self.coefficients[-1-i][-1-j]
+            result = result*M + Lresult
+        return result
+    
+    def __repr__(self):
+        digits = 2 + int(ceil(log(self.height)/log(10)))
+        width = len(self.coefficients[0])
+        format = '[' + ('%' + str(digits) + '.0f')*width + ']\n'
+        result = ''
+        for row in self.coefficients:
+            result += format%tuple(row + 0.)
+        return result
+
+    def help(self):
+        print self.__doc__
+
+    def symmetric_funcs(self, roots):
+        coeffs = [0, ones(roots[0].shape,'D')]
+        for root in roots:
+            for i in range(1, len(coeffs)):
+                coeffs[-i] = -root*coeffs[-i] + coeffs[-1-i]
+            coeffs.append(ones(roots[0].shape,'D'))
+        return coeffs[1:]
+
+    def demultiply(self, ev_list):
+            multiplicities = []
+            sdr = []
+            multis = [1]*len(ev_list)
+            for i in range(len(ev_list)):
+                unique = True
+                for j in range(i+1,len(ev_list)):
+                    if max(abs(ev_list[i] - ev_list[j])) < 1.0E-6:
+                        unique = False
+                        multis[j] += multis[i]
+                        break
+                if unique:
+                    sdr.append(i)
+                    multiplicities.append((i, multis[i]))
+            return multiplicities, [ev_list[i] for i in sdr]
+
+    def find_shift(self, raw_coeffs):
+       N = self.fft_size
+       if N%2 == 0:
+           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       else:
+           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+       coeffs = raw_coeffs*renorm
+       maxes = [max(abs(row.real)) for row in coeffs.transpose()]
+       for n in range(N):
+           if maxes[-n] < 0.01:
+               return n-1
+    
+    def monomials(self):
+        rows, cols = self.coefficients.shape
+        monomials = []
+        for j in range(cols):
+            for i in range(rows):
+                if self.gluing_form:
+                    m,n = 2*i, 2*j
+                else:
+                    m,n = 2*i, j
+                a = int(self.coefficients[i][j])
+                if a != 0:
+                    if i > 0:
+                        if j > 0:
+                            monomial = '%d*(M^%d)*(L^%d)'%(a,m,n)
+                        else:
+                            monomial = '%d*(M^%d)'%(a,m)
+                    else:
+                        if j > 0:
+                            monomial = '%d*(L^%d)'%(a,n)
+                        else:
+                            monomial = '%d'%a
+                    monomials.append(monomial)
+        return monomials
+
+    def as_polynomial(self):
+        polynomial = ('+'.join(self.monomials())).replace('+-','-')
+        return polynomial
+
+    def show_newton(self, text=False):
+        # The gluing_form should be renamed.  It indicates that the
+        # polynomial is using the holonomies of the longitude, rather
+        # than the eigenvalues.  In general, it would not make sense
+        # to take square roots.
+        V = Polyview(self.coefficients, self.gluing_form)
+        V.show_sides()
+        if text:
+            V.show_text()
+        else:
+            V.show_dots()
+
+#This should be derived from PolyRelation
 class Apoly:
     """
     The A-polynomial of a SnapPy manifold.  
@@ -644,22 +689,6 @@ class Apoly:
                     sdr.append(i)
                     multiplicities.append((i, multis[i]))
             return multiplicities, [ev_list[i] for i in sdr]
-
-    def x_find_shift(self, raw_coeffs):
-       rows, cols = raw_coeffs.shape
-       N = self.fft_size
-       shifts = [0]
-       if N%2 == 0:
-           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
-       else:
-           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = raw_coeffs*renorm
-       for i in range(rows):
-          for j in range(1, 1+ cols/2):
-             if abs(abs(coeffs[i][-j]) - 1.) < 0.01:
-                 shifts.append(j)
-       print 'shifts: ', shifts
-       return max(shifts)
 
     def find_shift(self, raw_coeffs):
        N = self.fft_size
@@ -812,7 +841,7 @@ class Apoly:
         self.lift.plot()
 
     def show_newton(self, text=False):
-        V = Polyview(self.coefficients, self.gluing_form)
+        V = Polyview(self.coefficients)
         V.show_sides()
         if text:
             V.show_text()
@@ -949,7 +978,66 @@ class NewtonPolygon:
                         self.slopes.append(s)
                   last_vertex = min
             self.bottom_vertices.reverse()
-         
+
+class Plot:
+    """
+    Uses gnuplot to plot a vector or list of vectors.
+    Assumes that all vectors in the list are the same type (Float or Complex)
+    Prompts for which ones to show.
+    """
+    def __init__(self, data, quiet=False):
+        if isinstance(data[0], list) or isinstance(data[0], ndarray):
+            self.data = data
+        else:
+            self.data = [data]
+        self.type = type(self.data[0][0])
+        self.gnuplot = Popen(['gnuplot', '-geometry 800x720+200+0'],
+                             shell=True,
+                             stdin=PIPE)
+        self.show_plots(quiet)
+
+    input = raw_input
+    
+    def show_plots(self, quiet):
+        if not quiet:
+            print 'There are %d functions.'%len(self.data)
+        print 'Which ones do you want to see?'
+        while 1:
+            try:
+                stuff = self.input('plot> ')
+                items = stuff.split()
+                if len(items) and items[0] == 'all':
+                    list = range(len(self.data))
+                else:
+                    list = [int(item)%len(self.data) for item in items]
+                if len(list) == 0:
+                    break
+            except ValueError:
+                break
+            print list
+            spec = []
+            for n in list:
+                spec.append('"-" t "%d" w lines'%n)
+            gnuplot_input = 'plot ' + ', '.join(spec) + '\n'
+            if self.type == complex128 or self.type == big_complex or self.type == complex:
+                for n in list:
+                    gnuplot_input += '\n'.join([
+                        '%f %f'%(point.real, point.imag)
+                        for point in self.data[n]] + ['e\n']) 
+            elif self.type == float64 or self.type == big_float or self.type == float:
+                for n in list:
+                    gnuplot_input += '\n'.join(
+                        ['%f'%point for point in self.data[n]] + ['e\n']) 
+            else:
+                print self.type
+                print self.data[0]
+                print "Data must consist of vectors of real or complex numbers."
+                return
+            self.gnuplot.stdin.write(gnuplot_input)
+        #self.gnuplot.close()
+        return
+
+
 class Polyview(NewtonPolygon):
       def __init__(self, coeff_array, gluing_form=True, scale=None, margin=50):
           self.rows, self.columns = coeff_array.shape
