@@ -39,7 +39,8 @@ class Glunomial:
 class Point:
     """
     A numpy array of complex numbers, with its own approximate
-    equality operator.  Instantiate with a sequence of complexes.
+    equality operator.  Instantiate with a sequence of complex
+    numbers.
     """
     def __init__(self, Z):
         self.Z = array(Z)
@@ -59,11 +60,11 @@ class Point:
                 or max(abs(self.Z)) > 1.0E6)
     
 class Fiber:
+    """
+    A fiber for the rational function [holonomy of the meridian].
+    Manages a single PHCSytem with a complete solution set.
+    """
     def __init__(self, H_meridian, system, tolerance=1.0E-06):
-        """
-        A fiber for the rational function [holonomy of the meridian].
-        Manages a single solved PHCSytem.
-        """
         self.H_meridian = H_meridian
         self.system = system
         self.tolerance = tolerance
@@ -131,7 +132,7 @@ class Fiber:
     
 class PHCFibrator:
     """
-    A factory for fibers computed by PHC.
+    A factory for Fibers, computed by PHC.
     """
     def __init__(self, mfld_name, radius=1.02):
         self.mfld_name = mfld_name
@@ -227,7 +228,7 @@ class Holonomizer:
         self.manifold = manifold = self.fibrator.manifold
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
-            raise RuntimeError, 'Starting fiber contains ideal points.'
+            raise RuntimeError, 'The starting fiber contains ideal points.'
         self.degree = len(self.base_fiber)
         self.dimension = manifold.num_tetrahedra()
         # pre-initialize
@@ -242,7 +243,7 @@ class Holonomizer:
         self.glunomials.append(self.M_holo)
         self.track_satellite()
         try:
-            self.R_longitude_holos, self.R_longitude_evs = self.longitude_data(self.R_fibers)
+            self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
         except:
             print 'Failed'
             
@@ -254,7 +255,7 @@ class Holonomizer:
         arg = log(self.base_fiber.H_meridian).imag%(2*pi)
         R = self.radius
         Darg = 2*pi/self.order
-        # This is to be consistent with the sign in numpy.fft
+        # The minus makes us consistent with the sign convention of numpy.fft
         self.R_circle = circle = [R*exp(-n*Darg*1j) for n in range(self.order)]
         self.base_index = base_index = (self.order - int((arg)/Darg))%self.order
         print base_index,
@@ -278,21 +279,21 @@ class Holonomizer:
         print
         self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
                                                     self.R_fibers[0].H_meridian)
-        print 'Polishing the ends ...'
+        print 'Polishing the end fibers ...'
         self.R_fibers[0].polish()
         self.last_R_fiber.polish()
         print 'Checking for completeness ... ',
         if not self.last_R_fiber == self.R_fibers[0]:
-            print 'lifts did not close up!'
-            print array(self.last_R_fiber.points)
-            print array(self.R_fibers[0].points)
+            print 'The end fibers did not agree!'
+            print 'It might help to use a larger radius, or you might'
+            print 'have been unlucky in your choise of base fiber.'
         else:
             print 'OK'
 
     def tighten(self, T=1.0):
         print 'Tightening the circle to radius %s ...'%T
         Darg = 2*pi/self.order
-        self.circle = circle = [T*exp(-n*Darg*1j) for n in range(self.order)]
+        self.T_circle = circle = [T*exp(-n*Darg*1j) for n in range(self.order)]
         for n in xrange(self.order):
             print n,
             sys.stdout.flush()
@@ -302,10 +303,10 @@ class Holonomizer:
         for n in xrange(self.order):
             t = self.T_fibers[n].Tillmann_points()
             if t:
-                print 'Tillman points %s found in fiber %s.'%(t, n)
-        self.longitude_holos, self.longitude_evs = self.longitude_data(self.T_fibers)
+                print 'Tillmann points %s found in fiber %s.'%(t, n)
+        self.T_longitude_holos, self.T_longitude_evs = self.longidata(self.T_fibers)
 
-    def longitude_data(self, fiber_list):
+    def longidata(self, fiber_list):
         print 'Computing longitude holonomies and eigenvalues.'
         longitude_holonomies = [
             [self.L_holo(f.points[n].Z) for f in fiber_list]
@@ -392,6 +393,60 @@ def solve_mod2_system(the_matrix,rhs):
         i -= 1
     return S
 
+class SU2CharVariety:
+    def __init__(self, manifold_name, order=128, radius=1.02, holonomizer=None):
+        self.manifold_name = manifold_name
+        if holonomizer is None:
+            self.holonomizer = Holonomizer(manifold_name, order=order, radius=radius)
+            self.holonomizer.tighten()
+        else:
+            self.holonomizer = holonomizer
+        self.order = self.holonomizer.order
+        self.manifold = self.holonomizer.manifold
+        self.build_arcs()
+
+    def build_arcs(self):
+        self.arcs = []
+        M_args = -arange(self.order, dtype=float64)/self.order
+        for track in self.holonomizer.T_longitude_evs:
+            arc = []
+            for n, ev in enumerate(track):
+                if 0.9999 < abs(ev) < 1.0001:
+                    L = (1 + (log(ev).imag)/pi)%2
+                    if n > 0 and abs(L - lastL) > 1 and len(arc) > 0:
+                        arc.append(None)
+                    arc.append( L + 1j*(M_args[n]%1) )
+                    lastL = L
+                else:
+                    if len(arc) > 1:
+                        self.arcs.append(arc)
+                    arc = []
+            if arc:
+                self.arcs.append(arc)
+        # Clean up endpoints at the corners of the pillowcase.
+        for arc in self.arcs:
+            try:
+                if abs(arc[1] - arc[0]) > 0.8:
+                    if abs(arc[0].imag) < .001:
+                        arc[0] = arc[0] + 1j
+                    elif abs(arc[0].imag - 1) < .001:
+                        arc[0] = arc[0] - 1j
+                if abs(arc[-1] - arc[-2]) > 0.8:
+                    if abs(arc[-1].imag) < .001:
+                        arc[-1] = arc[-1] + 1j
+                    elif abs(arc[-1].imag - 1) < .001:
+                        arc[-1] = arc[1] - 1j
+            except TypeError:
+                pass
+                        
+    def show(self):
+        Plot(self.arcs, commands="""
+                    set terminal aqua title "%s" size 1000 500
+                    set for [i = 1:10] style line i lw 2
+                    set xrange [0:2]
+                    set yrange[0:1]
+                    """%self.manifold_name)
+    
 class PolyRelation:
     """
     An integral polynomial relation satisfied by two coordinate
@@ -407,7 +462,7 @@ class PolyRelation:
         self.fft_size = fft_size
         self.denom = denom
         self.multi = multi
-        self.gluing_form=False
+        self.gluing_form=gluing_form
         Larrays = [array(x) for x in Lvalues]
         if multi == False:
             self.multiplicities, Larrays = self.demultiply(Larrays)
@@ -420,7 +475,7 @@ class PolyRelation:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
         self.shift = self.find_shift(self.raw_coeffs)
         if self.shift is None:
-            print 'Coefficients seem to be wrapping.  Try a larger fft size.'
+            print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
         renorm = self.radius**(-array(range(self.fft_size - self.shift)
                                       + range(-self.shift, 0)))
@@ -494,6 +549,20 @@ class PolyRelation:
             return multiplicities, [ev_list[i] for i in sdr]
 
     def find_shift(self, raw_coeffs):
+       rows, cols = raw_coeffs.shape
+       N = self.fft_size
+       shifts = [0]
+       renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       coeffs = raw_coeffs*renorm
+       for i in range(rows):
+          for j in range(1, 1+ cols/2):
+             if abs(abs(coeffs[i][-j]) - 1.) < .001:
+                 shifts.append(j)
+       print 'shifts: ', shifts
+       return max(shifts)
+
+
+    def Xfind_shift(self, raw_coeffs, tolerance= 0.001):
        N = self.fft_size
        if N%2 == 0:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
@@ -502,7 +571,7 @@ class PolyRelation:
        coeffs = raw_coeffs*renorm
        maxes = [max(abs(row.real)) for row in coeffs.transpose()]
        for n in range(N):
-           if maxes[-n] < 0.01:
+           if maxes[-n] < tolerance:
                return n-1
     
     def monomials(self):
@@ -584,7 +653,6 @@ class Apoly:
     An Apoly object prints itself as a matrix of coefficients.
 
   """
-
     def __init__(self, mfld_name, fft_size=128, gluing_form=False,
                  radius=1.02, denom=None, multi=False):
         self.mfld_name = mfld_name
@@ -608,10 +676,13 @@ class Apoly:
         self.radius = options['radius']
         self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size,
                                        radius=self.radius)
-        evs = [array(x) for x in self.holonomizer.R_longitude_evs]
+        if self.gluing_form:
+            vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+        else:
+            vals = [array(x) for x in self.holonomizer.R_longitude_evs]
         if multi == False:
-            self.multiplicities, evs = self.demultiply(evs)
-        self.sampled_coeffs = self.symmetric_funcs(evs)
+            self.multiplicities, vals = self.demultiply(vals)
+        self.sampled_coeffs = self.symmetric_funcs(vals)
         if self.denom:
             M = array(self.holonomizer.R_circle)
             exec('D = %s'%self.denom)
@@ -620,7 +691,7 @@ class Apoly:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
         self.shift = self.find_shift(self.raw_coeffs)
         if self.shift is None:
-            print 'Coefficients seem to be wrapping.  Try a larger fft size.'
+            print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
         renorm = self.radius**(-array(range(self.fft_size - self.shift)
                                       + range(-self.shift, 0)))
@@ -887,7 +958,7 @@ class Apoly:
     
     def tighten(self, T=1.0):
         self.holonomizer.tighten(T)
-        roots = [array(x) for x in self.holonomizer.longitude_evs]
+        roots = [array(x) for x in self.holonomizer.T_longitude_evs]
         self.T_sampled_coeffs = self.symmetric_funcs(roots)
         self.T_raw_coeffs = array([ifft(x) for x in self.T_sampled_coeffs])
 
@@ -985,7 +1056,9 @@ class Plot:
     Assumes that all vectors in the list are the same type (Float or Complex)
     Prompts for which ones to show.
     """
-    def __init__(self, data, quiet=False):
+    def __init__(self, data, quiet=True, commands=''):
+        self.quiet = quiet
+        self.commands = commands
         if isinstance(data[0], list) or isinstance(data[0], ndarray):
             self.data = data
         else:
@@ -994,49 +1067,57 @@ class Plot:
         self.gnuplot = Popen(['gnuplot', '-geometry 800x720+200+0'],
                              shell=True,
                              stdin=PIPE)
-        self.show_plots(quiet)
-
-    input = raw_input
+        if len(self.data) > 1:
+            self.show_plots()
+        else:
+            self.create_plot([0])
+            time.sleep(1)
+        self.gnuplot.terminate()
+        
+    def __repr__(self):
+        return ''
     
-    def show_plots(self, quiet):
-        if not quiet:
+    def create_plot(self, funcs):
+        spec = []
+        for n in funcs:
+            spec.append('"-" t "%d" w lines'%n)
+        gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
+        if self.type == complex128 or self.type == big_complex or self.type == complex:
+            for n in funcs:
+                gnuplot_input += '\n'.join([
+                    '%f %f'%(point.real, point.imag) if point is not None else ''
+                    for point in self.data[n]] + ['e\n']) 
+        elif self.type == float64 or self.type == big_float or self.type == float:
+            for n in funcs:
+                gnuplot_input += '\n'.join(
+                    ['%f'%point for point in self.data[n]] + ['e\n']) 
+        else:
+            print self.type
+            print self.data[0]
+            raise ValueError, "Data must consist of vectors of real or complex numbers."
+        self.gnuplot.stdin.write(gnuplot_input)
+        
+    def show_plots(self):
+        if not self.quiet:
             print 'There are %d functions.'%len(self.data)
-        print 'Which ones do you want to see?'
+            print 'Which ones do you want to see?'
+        else:
+            self.create_plot( range(len(self.data)) )
         while 1:
             try:
-                stuff = self.input('plot> ')
+                stuff = raw_input('plot> ')
                 items = stuff.split()
                 if len(items) and items[0] == 'all':
-                    list = range(len(self.data))
+                    funcs = range(len(self.data))
                 else:
-                    list = [int(item)%len(self.data) for item in items]
-                if len(list) == 0:
+                    funcs = [int(item)%len(self.data) for item in items]
+                if len(funcs) == 0:
                     break
             except ValueError:
                 break
-            print list
-            spec = []
-            for n in list:
-                spec.append('"-" t "%d" w lines'%n)
-            gnuplot_input = 'plot ' + ', '.join(spec) + '\n'
-            if self.type == complex128 or self.type == big_complex or self.type == complex:
-                for n in list:
-                    gnuplot_input += '\n'.join([
-                        '%f %f'%(point.real, point.imag)
-                        for point in self.data[n]] + ['e\n']) 
-            elif self.type == float64 or self.type == big_float or self.type == float:
-                for n in list:
-                    gnuplot_input += '\n'.join(
-                        ['%f'%point for point in self.data[n]] + ['e\n']) 
-            else:
-                print self.type
-                print self.data[0]
-                print "Data must consist of vectors of real or complex numbers."
-                return
-            self.gnuplot.stdin.write(gnuplot_input)
-        #self.gnuplot.close()
+            print funcs
+            self.create_plot(funcs)
         return
-
 
 class Polyview(NewtonPolygon):
       def __init__(self, coeff_array, gluing_form=True, scale=None, margin=50):
