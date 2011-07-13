@@ -230,7 +230,6 @@ class Holonomizer:
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'The starting fiber contains ideal points.'
         self.degree = len(self.base_fiber)
-        self.dimension = manifold.num_tetrahedra()
         # pre-initialize
         self.R_fibers = range(order)
         self.T_fibers = range(order)
@@ -311,6 +310,7 @@ class Holonomizer:
         longitude_holonomies = [
             [self.L_holo(f.points[n].Z) for f in fiber_list]
             for n in xrange(self.degree)]
+        # Should choose a random fiber, not the first one.
         longitude_traces = self.find_longitude_traces(fiber_list[0])
         longitude_eigenvalues = []
         for n, L in enumerate(longitude_holonomies):
@@ -363,6 +363,12 @@ class Holonomizer:
     def jacobian(self, Z):
         return matrix([E.gradient(Z) for E in self.glunomials])
 
+    def show_R_longitude_evs(self):
+        self.holonomizer.show_R_longitude_evs()
+
+    def show_T_longitude_evs(self):
+        self.holonomizer.show_T_longitude_evs()
+
 def solve_mod2_system(the_matrix,rhs):
     M,N = the_matrix.shape
     A = zeros((M,N+1),'i')
@@ -408,13 +414,21 @@ class SU2CharVariety:
     def build_arcs(self):
         self.arcs = []
         M_args = -arange(self.order, dtype=float64)/self.order
+        M_args = M_args%1
         for track in self.holonomizer.T_longitude_evs:
             arc = []
+            lastL = 0
             for n, ev in enumerate(track):
                 if 0.9999 < abs(ev) < 1.0001:
-                    L = (1 + (log(ev).imag)/pi)%2
-                    if n > 0 and abs(L - lastL) > 1 and len(arc) > 0:
+                    L = (log(ev).imag/pi)%2.0
+                    if lastL - L > 1 and n > 1:
+                        arc.append(2+L + 1j*M_args[n])
                         arc.append(None)
+                        arc.append(lastL-2 + 1j*M_args[n-1])
+                    elif L - lastL > 1 and n > 1:
+                        arc.append(L-2 + 1j*M_args[n])
+                        arc.append(None)
+                        arc.append(2+lastL + 1j*M_args[n-1])
                     arc.append( L + 1j*(M_args[n]%1) )
                     lastL = L
                 else:
@@ -426,26 +440,36 @@ class SU2CharVariety:
         # Clean up endpoints at the corners of the pillowcase.
         for arc in self.arcs:
             try:
-                if abs(arc[1] - arc[0]) > 0.8:
-                    if abs(arc[0].imag) < .001:
-                        arc[0] = arc[0] + 1j
-                    elif abs(arc[0].imag - 1) < .001:
+                if abs(arc[1] - arc[0]) > 0.5:
+                    if abs(arc[1].imag) < .1:
                         arc[0] = arc[0] - 1j
-                if abs(arc[-1] - arc[-2]) > 0.8:
-                    if abs(arc[-1].imag) < .001:
+                    elif abs(arc[1].imag - 1) < .1:
+                        arc[0] = arc[0] + 1j
+                    if abs(arc[1].real) < .1:
+                        arc[0] = arc[0] - 2
+                    elif abs(arc[1].real - 2) < .1:
+                        arc[0] = arc[0] + 2
+                if abs(arc[-1] - arc[-2]) > 0.5:
+                    if abs(arc[-2].imag) < .1:
+                        arc[-1] = arc[-1] - 1j
+                    elif abs(arc[-2].imag - 1) < .1:
                         arc[-1] = arc[-1] + 1j
-                    elif abs(arc[-1].imag - 1) < .001:
-                        arc[-1] = arc[1] - 1j
+                    if abs(arc[-2].real) < .1:
+                        arc[-1] = arc[-1] - 2
+                    elif abs(arc[-2].real - 2) < .1:
+                        arc[-1] = arc[-1] + 2
             except TypeError:
                 pass
                         
     def show(self):
         Plot(self.arcs, commands="""
                     set terminal aqua title "%s" size 1000 500
-                    set for [i = 1:10] style line i lw 2
                     set xrange [0:2]
                     set yrange[0:1]
-                    """%self.manifold_name)
+                    set xtics 1.0
+                    set grid xtics nomxtics
+                    set mxtics
+                    """%self.manifold_name, linewidth=2)
     
 class PolyRelation:
     """
@@ -473,10 +497,12 @@ class PolyRelation:
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
+        print self.raw_coeffs.shape
         self.shift = self.find_shift(self.raw_coeffs)
         if self.shift is None:
             print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
+        print 'Shift is %s.'%self.shift
         renorm = self.radius**(-array(range(self.fft_size - self.shift)
                                       + range(-self.shift, 0)))
         self.float_coeffs = renorm*self.raw_coeffs
@@ -495,12 +521,16 @@ class PolyRelation:
                 break
             rows -= 1
         self.coefficients = coefficient_array[:rows]
-        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
         self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
         print "Noise levels: "
         for level in self.noise:
             print level
+        if max(self.noise) > 0.1:
+            print 'Failed to find integer coefficients'
+            return
+        print 'Computing Newton polygon.'
+        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
             
     def __call__(self, M, L):
         result = 0
@@ -548,11 +578,14 @@ class PolyRelation:
                     multiplicities.append((i, multis[i]))
             return multiplicities, [ev_list[i] for i in sdr]
 
-    def find_shift(self, raw_coeffs):
+    def Xfind_shift(self, raw_coeffs):
        rows, cols = raw_coeffs.shape
        N = self.fft_size
        shifts = [0]
-       renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       if N%2 == 0:
+           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+       else:
+           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
        coeffs = raw_coeffs*renorm
        for i in range(rows):
           for j in range(1, 1+ cols/2):
@@ -561,18 +594,19 @@ class PolyRelation:
        print 'shifts: ', shifts
        return max(shifts)
 
-
-    def Xfind_shift(self, raw_coeffs, tolerance= 0.001):
+    def find_shift(self, raw_coeffs, tolerance= 0.001):
        N = self.fft_size
        if N%2 == 0:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = raw_coeffs*renorm
-       maxes = [max(abs(row.real)) for row in coeffs.transpose()]
-       for n in range(N):
-           if maxes[-n] < tolerance:
-               return n-1
+       coeffs = (raw_coeffs*renorm).transpose()
+       if max(abs(coeffs[N/2])) > 0.5:
+              return None
+       for n in range(1+N/2,N):
+           if max(abs(coeffs[n])) > 0.001:
+               return N - n
+       return 0
     
     def monomials(self):
         rows, cols = self.coefficients.shape
@@ -614,6 +648,16 @@ class PolyRelation:
         else:
             V.show_dots()
 
+class ShapeRelation(list):
+    def __init__(self, manifold_name):
+        self.holonomizer = H = Holonomizer(manifold_name)
+        H.tighten()
+        self.shapes = [
+            [[f.points[m].Z[n] for f in H.T_fibers] for m in range(H.degree)]
+            for n in range(H.dim)]
+        for shape in self.shapes:
+            self.append(PolyRelation(shape, H.T_circle, radius=1.0))
+
 #This should be derived from PolyRelation
 class Apoly:
     """
@@ -634,9 +678,12 @@ class Apoly:
     An Apoly object A is callable:  A(x,y) returns the value at (x,y).
     A.as_polynomial() returns a string suitable for input to a symbolic
                       algebra program.
-    A.show_lifts() uses gnuplot to graph the L-projections of components of
-                   the inverse image of a circle in the M-plane.  The circle
-                   is centered at the origin and the radius is as specified.
+    A.show_R_longitude_evs() uses gnuplot to graph the L-projections
+                   of components of the inverse image of the satellite
+                   circle in the M-plane.
+    A.show_T_longitude_evs() uses gnuplot to graph the L-projections
+                   of components of the inverse image of the tightened
+                   circle in the M-plane.
     A.show_newton(text=False) shows the newton polygon with dots.  The text
                               flag shows the coefficients.
     A.boundary_slopes() prints the boundary slopes detected by the character
@@ -651,7 +698,6 @@ class Apoly:
     A.verify() runs various consistency checks on the polynomial.
 
     An Apoly object prints itself as a matrix of coefficients.
-
   """
     def __init__(self, mfld_name, fft_size=128, gluing_form=False,
                  radius=1.02, denom=None, multi=False):
@@ -690,12 +736,15 @@ class Apoly:
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
         self.shift = self.find_shift(self.raw_coeffs)
+        print 'Shift is %s'%self.shift
         if self.shift is None:
             print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
         renorm = self.radius**(-array(range(self.fft_size - self.shift)
                                       + range(-self.shift, 0)))
         self.float_coeffs = renorm*self.raw_coeffs
+#        print self.raw_coeffs
+#        print self.float_coeffs
         self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
         self.height = max([max(abs(x)) for x in self.int_coeffs])
         if self.height > float(2**52):
@@ -703,7 +752,8 @@ class Apoly:
         C = self.int_coeffs.transpose()
         coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
         rows, cols = coefficient_array.shape
-        while rows:
+#        print rows, cols, coefficient_array
+        while rows > 0:
             if max(abs(coefficient_array[rows-1])) > 0:
                 break
             rows -= 1
@@ -714,6 +764,11 @@ class Apoly:
         print "Noise levels: "
         for level in self.noise:
             print level
+        if max(self.noise) > 0.1:
+            print 'Failed to find integer coefficients'
+            return
+        print 'Computing Newton polygon.'
+        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
             
     def __call__(self, M, L):
         result = 0
@@ -767,12 +822,14 @@ class Apoly:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = raw_coeffs*renorm
-       maxes = [max(abs(row.real)) for row in coeffs.transpose()]
-       for n in range(N):
-           if maxes[-n] < 0.01:
-               return n-1
-    
+       coeffs = (raw_coeffs*renorm).transpose()
+       if max(abs(coeffs[N/2])) > 0.5:
+              return None
+       for n in range(1+N/2,N):
+           if max(abs(coeffs[n])) > 0.001:
+               return N - n
+       return 0
+
     def monomials(self):
         rows, cols = self.coefficients.shape
         monomials = []
@@ -907,9 +964,11 @@ class Apoly:
     def boundary_slopes(self):
         print self.newton_polygon.slopes
         
-    def show_lifts(self):
-        # broken
-        self.lift.plot()
+    def show_R_longitude_evs(self):
+        R_plot = Plot(self.holonomizer.R_longitude_evs)
+
+    def show_T_longitude_evs(self):
+        R_plot = Plot(self.holonomizer.T_longitude_evs)
 
     def show_newton(self, text=False):
         V = Polyview(self.coefficients)
@@ -924,9 +983,6 @@ class Apoly:
 
     def show_outer_volumes(self):
         Plot(self.lift.outer_volumes)
-
-    def show_logabsL(self):
-        Plot([log(abs(x)) for x in self.lift.Lsamples])
 
     def verify(self):
         result = True
@@ -1003,12 +1059,12 @@ class NewtonPolygon:
             for j in range(self.columns):
                   nonzero = where(self.coefficients[:,j],1,0).tolist()
                   try:
-                        bottom = nonzero.index(1)
-                        nonzero.reverse()
-                        top = len(nonzero) - nonzero.index(1) - 1
+                      bottom = nonzero.index(1)
+                      nonzero.reverse()
+                      top = len(nonzero) - nonzero.index(1) - 1
                   except ValueError:
-                        print 'Failed to construct Newton Polygon'
-                        return
+                      bottom = None
+                      top = None
                   tops.append(top)
                   bottoms.append(bottom)
             if tops[0] != bottoms[0]:
@@ -1019,7 +1075,7 @@ class NewtonPolygon:
                   slope = (0,-1)
                   x,y = self.top_vertices[-1]
                   for j in range(last_vertex+1, self.columns):
-                        if tops[j] == None:
+                        if tops[j] == None or x == None or y == None:
                             continue
                         # Why does this sometimes throw an exception?
                         newslope =  (j - y, tops[j] - x)
@@ -1056,9 +1112,10 @@ class Plot:
     Assumes that all vectors in the list are the same type (Float or Complex)
     Prompts for which ones to show.
     """
-    def __init__(self, data, quiet=True, commands=''):
+    def __init__(self, data, quiet=True, commands='', linewidth=2):
         self.quiet = quiet
         self.commands = commands
+        self.linewidth=linewidth
         if isinstance(data[0], list) or isinstance(data[0], ndarray):
             self.data = data
         else:
@@ -1080,7 +1137,7 @@ class Plot:
     def create_plot(self, funcs):
         spec = []
         for n in funcs:
-            spec.append('"-" t "%d" w lines'%n)
+            spec.append('"-" t "%d" w lines lw %s'%(n, self.linewidth))
         gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
         if self.type == complex128 or self.type == big_complex or self.type == complex:
             for n in funcs:
