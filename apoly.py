@@ -14,8 +14,19 @@ from snappy import *
 from random import random
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
+try:
+    from sage.all import polygen, polygens, QQ, CC
+    M,L = polygens(QQ, 'M,L')
+    x = polygen(QQ, 'x')
+    z = polygen(CC, 'z')
+    got_sage = True
+except:
+    pass
 
-
+def sage_poly(polystring):
+    exec('result = %s'%polystring.replace('^','**'))
+    return result
+    
 DTYPE = dtype('c16')
 
 class Glunomial:
@@ -323,7 +334,17 @@ class Holonomizer:
                 E.append(e if abs(e - E[m-1]) < abs(e + E[m-1]) else -e )
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
-    
+
+    def compute_volumes(self, fiber_list):
+        volumes = [ [] for n in range(self.degree) ]
+        for fiber in fiber_list:
+            for n, point in enumerate(fiber.points):
+                self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+                volumes[n].append(self.manifold.volume())
+        return volumes
+                
+
+        
     def find_longitude_traces(self, fiber):
         trace = lambda rep : rep[0,0] + rep[1,1]
         traces = []
@@ -399,7 +420,7 @@ def solve_mod2_system(the_matrix,rhs):
         i -= 1
     return S
 
-class SU2CharVariety:
+class PECharVariety:
     def __init__(self, manifold_name, order=128, radius=1.02, holonomizer=None):
         self.manifold_name = manifold_name
         if holonomizer is None:
@@ -529,7 +550,7 @@ class PolyRelation:
         if max(self.noise) > 0.1:
             print 'Failed to find integer coefficients'
             return
-        print 'Computing Newton polygon.'
+        print 'Computing the Newton polygon.'
         self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
             
     def __call__(self, M, L):
@@ -767,7 +788,7 @@ class Apoly:
         if max(self.noise) > 0.1:
             print 'Failed to find integer coefficients'
             return
-        print 'Computing Newton polygon.'
+        print 'Computing the Newton polygon.'
         self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
             
     def __call__(self, M, L):
@@ -1278,6 +1299,8 @@ class Polyview(NewtonPolygon):
             self.sides=[]
 
 winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
+if got_sage:
+    Apoly.sage_poly = lambda self : sage_poly(self.as_polynomial())
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
