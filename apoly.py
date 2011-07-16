@@ -14,6 +14,7 @@ from snappy import *
 from random import random
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
+got_sage = False
 try:
     from sage.all import polygen, polygens, QQ, CC
     M,L = polygens(QQ, 'M,L')
