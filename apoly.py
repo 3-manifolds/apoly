@@ -1,7 +1,7 @@
 from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, complex128, float64, take, arange, where
-from numpy.linalg import svd, norm
+from numpy.linalg import svd, norm, eig
 from numpy.fft import ifft
 try:
     from numpy import complex256 as big_complex
@@ -242,6 +242,7 @@ class Holonomizer:
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'The starting fiber contains ideal points.'
         self.degree = len(self.base_fiber)
+        print 'Degree is %s.'%self.degree
         # pre-initialize
         self.R_fibers = range(order)
         self.T_fibers = range(order)
@@ -269,11 +270,11 @@ class Holonomizer:
         # The minus makes us consistent with the sign convention of numpy.fft
         self.R_circle = circle = [R*exp(-n*Darg*1j) for n in range(self.order)]
         self.base_index = base_index = (self.order - int((arg)/Darg))%self.order
-        print base_index,
+        print ' %-5s\r'%base_index,
         self.R_fibers[base_index] = self.fibrator.transport(
                 self.base_fiber, circle[base_index])
         for n in xrange(base_index+1, self.order):
-            print n,
+            print ' %-5s\r'%n,
             sys.stdout.flush()
             self.R_fibers[n] = F = self.fibrator.transport(
                 self.R_fibers[n-1], circle[n])
@@ -281,7 +282,7 @@ class Holonomizer:
             if not F.is_finite():
                 print '**',
         for n in xrange(base_index-1, -1, -1):
-            print n,
+            print ' %-5s\r'%n,
             sys.stdout.flush()
             self.R_fibers[n] = F = self.fibrator.transport(
                 self.R_fibers[n+1], circle[n])
@@ -297,7 +298,7 @@ class Holonomizer:
         if not self.last_R_fiber == self.R_fibers[0]:
             print 'The end fibers did not agree!'
             print 'It might help to use a larger radius, or you might'
-            print 'have been unlucky in your choise of base fiber.'
+            print 'have been unlucky in your choice of base fiber.'
         else:
             print 'OK'
 
@@ -306,7 +307,7 @@ class Holonomizer:
         Darg = 2*pi/self.order
         self.T_circle = circle = [T*exp(-n*Darg*1j) for n in range(self.order)]
         for n in xrange(self.order):
-            print n,
+            print ' %-5s\r'%n,
             sys.stdout.flush()
             self.T_fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
             self.T_fibers[n].system.polish()
@@ -343,8 +344,6 @@ class Holonomizer:
                 self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
                 volumes[n].append(self.manifold.volume())
         return volumes
-                
-
         
     def find_longitude_traces(self, fiber):
         trace = lambda rep : rep[0,0] + rep[1,1]
@@ -382,6 +381,39 @@ class Holonomizer:
             traces.append(tr)
         return traces
 
+    def SL2C(self, word, point):
+        self.manifold.dehn_fill((0,0))
+        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+        G = self.manifold.fundamental_group()
+        return G.SL2C(word)
+
+    def O31(self, word, point):
+        self.manifold.dehn_fill((0,0))
+        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+        G = self.manifold.fundamental_group()
+        return G.O31(word)
+
+    def in_SU2(self, point):
+        gens = self.manifold.fundamental_group().generators()
+        A = self.O31(gens[0], point)
+        B = self.O31(gens[1], point)
+        M = zeros((4,4), complex128)
+        try:
+            vals, vecs = eig(A)
+            M[:,[0,1]] = vecs[:,[n for n in range(4) if abs(vals[n]-1.0) < 1.0E-10]]
+            vals, vecs = eig(B)
+            M[:,[2,3]] = vecs[:,[n for n in range(4) if abs(vals[n]-1.0) < 1.0E-10]]
+        except:
+            return False
+        vals, vecs = eig(M)
+        fix = matrix(vecs[:,abs(vals) < 1.0E-10])
+        if fix.shape != (4,1):
+            return False
+        for g in gens[2:]:
+            if norm(self.O31(g, point)*fix) > 1.0E-10:
+                return False
+        return True
+    
     def jacobian(self, Z):
         return matrix([E.gradient(Z) for E in self.glunomials])
 
@@ -519,13 +551,13 @@ class PolyRelation:
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
-        print self.raw_coeffs.shape
+        #print self.raw_coeffs.shape
         self.shift = self.find_shift(self.raw_coeffs)
         if self.shift is None:
             print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
         print 'Shift is %s.'%self.shift
-        renorm = self.radius**(-array(range(self.fft_size - self.shift)
+        renorm = array([self.radius])**(-array(range(self.fft_size - self.shift)
                                       + range(-self.shift, 0)))
         self.float_coeffs = renorm*self.raw_coeffs
         self.height = max([max(abs(x.real)) for x in self.float_coeffs])
@@ -552,7 +584,8 @@ class PolyRelation:
             print 'Failed to find integer coefficients'
             return
         print 'Computing the Newton polygon.'
-        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
+        power_scale = (1,1) if self.gluing_form else (1,2) 
+        self.newton_polygon = NewtonPolygon(self.as_dict(), power_scale)
             
     def __call__(self, M, L):
         result = 0
@@ -603,11 +636,12 @@ class PolyRelation:
     def Xfind_shift(self, raw_coeffs):
        rows, cols = raw_coeffs.shape
        N = self.fft_size
+       R = array([self.radius])
        shifts = [0]
        if N%2 == 0:
-           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+           renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
-           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+           renorm = R**(-array(range(1+N/2)+range(-(N/2), 0)))
        coeffs = raw_coeffs*renorm
        for i in range(rows):
           for j in range(1, 1+ cols/2):
@@ -618,10 +652,11 @@ class PolyRelation:
 
     def find_shift(self, raw_coeffs, tolerance= 0.001):
        N = self.fft_size
+       R = array([self.radius])
        if N%2 == 0:
-           renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+           renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
-           renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+           renorm = R**(-array(range(1+N/2)+range(-(N/2), 0)))
        coeffs = (raw_coeffs*renorm).transpose()
        if max(abs(coeffs[N/2])) > 0.5:
               return None
@@ -663,7 +698,7 @@ class PolyRelation:
         # polynomial is using the holonomies of the longitude, rather
         # than the eigenvalues.  In general, it would not make sense
         # to take square roots.
-        V = Polyview(self.coefficients, self.gluing_form)
+        V = PolyViewer(self.newton_polygon())
         V.show_sides()
         if text:
             V.show_text()
@@ -780,7 +815,6 @@ class Apoly:
                 break
             rows -= 1
         self.coefficients = coefficient_array[:rows]
-        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
         self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
         print "Noise levels: "
@@ -790,7 +824,8 @@ class Apoly:
             print 'Failed to find integer coefficients'
             return
         print 'Computing the Newton polygon.'
-        self.newton_polygon = NewtonPolygon(self.coefficients, self.gluing_form)
+        power_scale = (1,1) if self.gluing_form else (1,2) 
+        self.newton_polygon = NewtonPolygon(self.as_dict(), power_scale)
             
     def __call__(self, M, L):
         result = 0
@@ -852,6 +887,7 @@ class Apoly:
                return N - n
        return 0
 
+# Should have a monomial class, and generate a list of monomials here not a string
     def monomials(self):
         rows, cols = self.coefficients.shape
         monomials = []
@@ -876,6 +912,21 @@ class Apoly:
                     monomials.append(monomial)
         return monomials
 
+# Should use the list of monomials to generate the dict
+    def as_dict(self):
+        rows, cols = self.coefficients.shape
+        result = {}
+        for j in range(cols):
+            for i in range(rows):
+                if self.gluing_form:
+                    m,n = 2*i, 2*j
+                else:
+                    m,n = 2*i, j
+                coeff = int(self.coefficients[i][j])
+                if coeff:
+                    result[(m,n)] = coeff
+        return result
+
     def break_line(self, line):
         marks = [0]
         start = 60
@@ -895,6 +946,7 @@ class Apoly:
         polynomial = ('+'.join(self.monomials())).replace('+-','-')
         return polynomial
 
+# could do this by sorting the monomials
     def as_Lpolynomial(self, name='A', twist=0):
         terms = []
         rows, cols = self.coefficients.shape
@@ -984,7 +1036,7 @@ class Apoly:
             hintfile.close()
             
     def boundary_slopes(self):
-        print self.newton_polygon.slopes
+        print self.newton_polygon.lower_slopes
         
     def show_R_longitude_evs(self):
         R_plot = Plot(self.holonomizer.R_longitude_evs)
@@ -993,18 +1045,20 @@ class Apoly:
         R_plot = Plot(self.holonomizer.T_longitude_evs)
 
     def show_newton(self, text=False):
-        V = Polyview(self.coefficients)
+        V = PolyViewer(self.newton_polygon)
         V.show_sides()
         if text:
             V.show_text()
         else:
             V.show_dots()
 
-    def show_volumes(self):
-        Plot(self.lift.volumes)
+    def show_R_volumes(self):
+        H = self.holonomizer
+        Plot(H.compute_volumes(H.R_fibers))
 
-    def show_outer_volumes(self):
-        Plot(self.lift.outer_volumes)
+    def show_T_volumes(self):
+        H = self.holonomizer
+        Plot(H.compute_volumes(H.T_fibers))
 
     def verify(self):
         result = True
@@ -1041,10 +1095,9 @@ class Apoly:
         self.T_raw_coeffs = array([ifft(x) for x in self.T_sampled_coeffs])
 
 class Slope:
-      def __init__(self, xy, gluing_form=True):
+      def __init__(self, xy, power_scale=(1,1)):
             x, y = xy
-            if gluing_form == False:
-                  y *= 2
+            x, y = x*power_scale[0], y*power_scale[1]
             if x == 0:
                   if y == 0:
                         raise ValueError, "gcd(0,0) is undefined."
@@ -1068,76 +1121,60 @@ class Slope:
             return '%d/%d'%(self.y, self.x)
 
 class NewtonPolygon:
-      def __init__(self, coeff_array, gluing_form):
-          self.rows, self.columns = coeff_array.shape
-          self.coefficients = coeff_array
-          self.gluing_form = gluing_form
-          self.slopes=[]
+      def __init__(self, coeff_dict, power_scale=(1,1)):
+          # The X-power is the y-coordinate!
+          self.coeff_dict = coeff_dict
+          self.exponents = [(x[1], x[0]) for x in coeff_dict.keys()]
+          self.exponents.sort()
+          self.lower_slopes = []
+          self.upper_slopes = []
+          self.lower_vertices = []
+          self.upper_vertices = []
           self.find_vertices()
-            
-      def find_vertices(self):
-            tops = []
-            bottoms = []
-            for j in range(self.columns):
-                  nonzero = where(self.coefficients[:,j],1,0).tolist()
-                  try:
-                      bottom = nonzero.index(1)
-                      nonzero.reverse()
-                      top = len(nonzero) - nonzero.index(1) - 1
-                  except ValueError:
-                      bottom = None
-                      top = None
-                  tops.append(top)
-                  bottoms.append(bottom)
-            if tops[0] != bottoms[0]:
-                  self.slopes.append(Slope((0,1)))
-            self.top_vertices = [(tops[0],0)]
-            last_vertex = max = 0
-            while last_vertex < self.columns - 1:
-                  slope = (0,-1)
-                  x,y = self.top_vertices[-1]
-                  for j in range(last_vertex+1, self.columns):
-                        if tops[j] == None or x == None or y == None:
-                            continue
-                        # Why does this sometimes throw an exception?
-                        newslope =  (j - y, tops[j] - x)
-                        if newslope[1]*slope[0] >= newslope[0]*slope[1]:
-                              max = j
-                              slope=newslope
-                  self.top_vertices.append((tops[max], max))
-                  s = Slope(slope, self.gluing_form)
-                  if not s in self.slopes:
-                        self.slopes.append(s)
-                  last_vertex = max
-            self.bottom_vertices = [(bottoms[0],0)]
-            last_vertex = min = 0
-            while last_vertex < self.columns - 1:
-                  slope = (0,1)
-                  x,y = self.bottom_vertices[-1]
-                  for j in range(last_vertex+1, self.columns):
-                        if bottoms[j] == None:
-                              continue
-                        newslope =  (j - y, bottoms[j] - x)
-                        if newslope[1]*slope[0] <= newslope[0]*slope[1]:
-                              min = j
-                              slope=newslope
-                  self.bottom_vertices.append((bottoms[min], min))
-                  s = Slope(slope, self.gluing_form)
-                  if not s in self.slopes:
-                        self.slopes.append(s)
-                  last_vertex = min
-            self.bottom_vertices.reverse()
 
+      def slope(self, v, w):
+          return Slope((w[0]-v[0], w[1]-v[1]))
+
+      def find_vertices(self):
+          last = self.exponents[0]
+          T = []
+          B = [last]
+          for e in self.exponents[1:]:
+              if e[0] != last[0]:
+                  T.append(last)
+                  B.append(e)
+              last = e
+          T.append(last)
+          if T[0] != B[0]:
+              self.lower_slopes.append(Slope((0,1)))
+              self.upper_vertices.append(T[0])
+          n = 0
+          while n < len(B) - 1:
+              self.lower_vertices.append(B[n])
+              slope, m = min([(self.slope(B[n], B[k]), -k) for k in range(n+1,len(B))])
+              self.lower_slopes.append(slope)
+              n = -m
+          n = 0
+          while n < len(T) - 1:
+              slope, m = max([(self.slope(T[n], T[k]), k) for k in range(n+1,len(T))])
+              self.upper_slopes.append(slope)
+              self.upper_vertices.append(T[m])
+              n = m
+          if T[-1] != B[-1]:
+              self.upper_slopes.append(Slope((0,1)))
+              self.lower_vertices.append(B[-1])
+          
 class Plot:
     """
     Uses gnuplot to plot a vector or list of vectors.
     Assumes that all vectors in the list are the same type (Float or Complex)
     Prompts for which ones to show.
     """
-    def __init__(self, data, quiet=True, commands='', linewidth=2):
+    def __init__(self, data, quiet=True, commands='', linewidth=2, style='lines'):
         self.quiet = quiet
         self.commands = commands
         self.linewidth=linewidth
+        self.style = style
         if isinstance(data[0], list) or isinstance(data[0], ndarray):
             self.data = data
         else:
@@ -1159,7 +1196,7 @@ class Plot:
     def create_plot(self, funcs):
         spec = []
         for n in funcs:
-            spec.append('"-" t "%d" w lines lw %s'%(n, self.linewidth))
+            spec.append('"-" t "%d" w %s lw %s'%(n, self.style, self.linewidth))
         gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
         if self.type == complex128 or self.type == big_complex or self.type == complex:
             for n in funcs:
@@ -1198,27 +1235,25 @@ class Plot:
             self.create_plot(funcs)
         return
 
-class Polyview(NewtonPolygon):
-      def __init__(self, coeff_array, gluing_form=True, scale=None, margin=50):
-          self.rows, self.columns = coeff_array.shape
-          self.gluing_form = gluing_form
+class PolyViewer:
+      def __init__(self, newton_poly, scale=None, margin=50):
+          self.NP = newton_poly
+          self.columns = 1 + self.NP.exponents[-1][0]
+          self.rows = 1 + max([d[1] for d in self.NP.exponents])
           if scale == None:
-                scale = 600/max(coeff_array.shape)
+                scale = 600/max(self.rows, self.columns)
           self.scale = scale
           self.margin = margin
           self.width = (self.columns - 1)*self.scale + 2*self.margin
           self.height = (self.rows - 1)*self.scale + 2*self.margin
           self.window = Tkinter.Tk()
           self.window.wm_geometry('+400+20')
-          self.coefficients = coeff_array
-          self.slopes=[]
-          self.find_vertices()
           self.canvas = Tkinter.Canvas(self.window,
                                   bg='white',
                                   height=self.height,
                                   width=self.width)
           self.canvas.pack()
-          self.font = ('Helvetica','16','bold')
+          self.font = ('Helvetica','18','bold')
           self.dots=[]
           self.text=[]
           self.sides=[]
@@ -1247,17 +1282,15 @@ class Polyview(NewtonPolygon):
           
       def point(self, pair):
           i,j = pair
-          return (self.margin+j*self.scale,
-                  self.height - self.margin - i*self.scale)
+          return (self.margin+i*self.scale,
+                  self.height - self.margin - j*self.scale)
       
       def show_dots(self):
           r = 1 + self.scale/20
-          for i in range(self.rows):
-              for j in range(self.columns):
-                  if self.coefficients[i][j] != 0:
-                      x,y = self.point((i,j))
-                      self.dots.append(self.canvas.create_oval(
-                          x-r, y-r, x+r, y+r, fill='black'))
+          for i, j in self.NP.exponents:
+              x,y = self.point((i,j))
+              self.dots.append(self.canvas.create_oval(
+                  x-r, y-r, x+r, y+r, fill='black'))
 
       def erase_dots(self):
           for dot in self.dots:
@@ -1265,16 +1298,17 @@ class Polyview(NewtonPolygon):
           self.dots = []
 
       def show_text(self):
-          for i in range(self.rows):
-              for j in range(self.columns):
-                  if self.coefficients[i][j] == 0:
-                      continue
-                  x,y = self.point((i,j))
-                  self.text.append(self.canvas.create_text(
-                          x,y,
-                          text=str(self.coefficients[i][j]),
-                          font=self.font,
-                          anchor='c'))
+          r = 2 + self.scale/20
+          for i, j in self.NP.exponents:
+              x,y = self.point((i,j))
+              self.sides.append(self.canvas.create_oval(
+                  x-r, y-r, x+r, y+r, fill='black'))
+              self.text.append(self.canvas.create_text(
+                  2*r+x,-2*r+y,
+                  text=str(self.NP.coeff_dict[(j,i)]),
+                  font=self.font,
+                  anchor='c'))
+              
       def erase_text(self):
             for coeff in self.text:
                   self.canvas.delete(coeff)
@@ -1282,9 +1316,11 @@ class Polyview(NewtonPolygon):
 
       def show_sides(self):
             r = 2 + self.scale/20
-            first = self.top_vertices[0]
+            first = self.NP.lower_vertices[0]
             x1, y1 = self.point(first)
-            vertices = self.top_vertices + self.bottom_vertices + [first]
+            upper = list(self.NP.upper_vertices)
+            upper.reverse()
+            vertices = self.NP.lower_vertices + upper + [first]
             for vertex in vertices:
                   self.sides.append(self.canvas.create_oval(
                         x1-r, y1-r, x1+r, y1+r, fill='red'))
@@ -1302,6 +1338,7 @@ class Polyview(NewtonPolygon):
 winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
 if got_sage:
     Apoly.sage_poly = lambda self : sage_poly(self.as_polynomial())
+    PolyRelation.sage_poly = lambda self : sage_poly(self.as_polynomial())
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
