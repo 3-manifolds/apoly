@@ -1122,10 +1122,13 @@ class Slope:
 
 class NewtonPolygon:
       def __init__(self, coeff_dict, power_scale=(1,1)):
+          # Clean up weird sage tuples
+          self.coeff_dict = {}
+          for (degree, coefficient) in coeff_dict.items():
+              self.coeff_dict[tuple(degree)] = coefficient
           # The X-power is the y-coordinate!
-          self.coeff_dict = coeff_dict
-          self.exponents = [(x[1], x[0]) for x in coeff_dict.keys()]
-          self.exponents.sort()
+          self.support = [(x[1], x[0]) for x in coeff_dict.keys()]
+          self.support.sort()
           self.lower_slopes = []
           self.upper_slopes = []
           self.lower_vertices = []
@@ -1136,10 +1139,10 @@ class NewtonPolygon:
           return Slope((w[0]-v[0], w[1]-v[1]))
 
       def find_vertices(self):
-          last = self.exponents[0]
+          last = self.support[0]
           T = []
           B = [last]
-          for e in self.exponents[1:]:
+          for e in self.support[1:]:
               if e[0] != last[0]:
                   T.append(last)
                   B.append(e)
@@ -1238,8 +1241,8 @@ class Plot:
 class PolyViewer:
       def __init__(self, newton_poly, scale=None, margin=50):
           self.NP = newton_poly
-          self.columns = 1 + self.NP.exponents[-1][0]
-          self.rows = 1 + max([d[1] for d in self.NP.exponents])
+          self.columns = 1 + self.NP.support[-1][0]
+          self.rows = 1 + max([d[1] for d in self.NP.support])
           if scale == None:
                 scale = 600/max(self.rows, self.columns)
           self.scale = scale
@@ -1287,7 +1290,7 @@ class PolyViewer:
       
       def show_dots(self):
           r = 1 + self.scale/20
-          for i, j in self.NP.exponents:
+          for i, j in self.NP.support:
               x,y = self.point((i,j))
               self.dots.append(self.canvas.create_oval(
                   x-r, y-r, x+r, y+r, fill='black'))
@@ -1299,7 +1302,7 @@ class PolyViewer:
 
       def show_text(self):
           r = 2 + self.scale/20
-          for i, j in self.NP.exponents:
+          for i, j in self.NP.support:
               x,y = self.point((i,j))
               self.sides.append(self.canvas.create_oval(
                   x-r, y-r, x+r, y+r, fill='black'))
