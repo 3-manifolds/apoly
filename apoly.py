@@ -1133,6 +1133,7 @@ class NewtonPolygon:
           self.upper_slopes = []
           self.lower_vertices = []
           self.upper_vertices = []
+          self.newton_sides = []
           self.find_vertices()
 
       def slope(self, v, w):
@@ -1154,8 +1155,15 @@ class NewtonPolygon:
           n = 0
           while n < len(B) - 1:
               self.lower_vertices.append(B[n])
-              slope, m = min([(self.slope(B[n], B[k]), -k) for k in range(n+1,len(B))])
+              slopes = [(self.slope(B[n], B[k]), -k) for k in range(n+1,len(B))]
+              slope, m = min(slopes)
               self.lower_slopes.append(slope)
+              if slope.y < 0:
+                  newton_side = [B[n]]
+                  for s, j in slopes:
+                      if s == slope and -j <= -m:
+                          newton_side.append(B[-j])
+                  self.newton_sides.append(newton_side)
               n = -m
           n = 0
           while n < len(T) - 1:
@@ -1166,7 +1174,17 @@ class NewtonPolygon:
           if T[-1] != B[-1]:
               self.upper_slopes.append(Slope((0,1)))
               self.lower_vertices.append(B[-1])
-          
+
+      def side_dicts(self):
+          result = []
+          for side in self.newton_sides:
+              side_dict = {}
+              for i, j in side:
+                  side_dict[(j,i)] = self.coeff_dict[(j,i)]
+              result.append(side_dict)
+          return result
+              
+
 class Plot:
     """
     Uses gnuplot to plot a vector or list of vectors.
