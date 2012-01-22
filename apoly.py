@@ -423,6 +423,27 @@ class Holonomizer:
     def show_T_longitude_evs(self):
         self.holonomizer.show_T_longitude_evs()
 
+    def holo_permutation(self):
+        return [self.R_fibers[0].points.index(p)
+                for p in self.last_R_fiber.points]
+
+    def holo_orbits(self):
+        P = self.holo_permutation()
+        Q = list(P)
+        orbits = []
+        while Q:
+            first_one = this_one = Q.pop()
+            orbit = []
+            while True:
+                orbit.append(this_one)
+                this_one = P[this_one]
+                if this_one == first_one:
+                    break
+                else:
+                    Q.remove(this_one)
+            orbits.append(orbit)
+        return orbits
+
 def solve_mod2_system(the_matrix,rhs):
     M,N = the_matrix.shape
     A = zeros((M,N+1),'i')
@@ -517,7 +538,7 @@ class PECharVariety:
                         
     def show(self):
         Plot(self.arcs, commands="""
-                    set terminal aqua title "%s" size 1000 500
+                    set terminal X11 title "%s" size 1000 500
                     set xrange [0:2]
                     set yrange[0:1]
                     set xtics 1.0
@@ -1208,8 +1229,8 @@ class Plot:
             self.show_plots()
         else:
             self.create_plot([0])
-            time.sleep(1)
-        self.gnuplot.terminate()
+#            time.sleep(1)
+#        self.gnuplot.terminate()
         
     def __repr__(self):
         return ''
