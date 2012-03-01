@@ -18,14 +18,21 @@ got_sage = False
 try:
     from sage.all import polygen, polygens, QQ, CC
     M,L = polygens(QQ, 'M,L')
-    x = polygen(QQ, 'x')
+    t = polygen(QQ, 't')
     z = polygen(CC, 'z')
     got_sage = True
 except:
     pass
 
-def sage_poly(polystring):
-    exec('result = %s'%polystring.replace('^','**'))
+def sage_2poly(dict, ring=None):
+    if not got_sage:
+        raise RuntimeError, 'SagePolynomials only exist when running in Sage.'
+    if ring is None:
+        ring = QQ['x','y']
+    x, y = ring.gens()[:2]
+    result = ring(0)
+    for m, n in dict.keys():
+        result += dict[(m,n)]*x**m*y**n
     return result
     
 DTYPE = dtype('c16')
@@ -393,6 +400,12 @@ class Holonomizer:
         G = self.manifold.fundamental_group()
         return G.O31(word)
 
+    def SL2C(self, word, point):
+        self.manifold.dehn_fill((0,0))
+        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+        G = self.manifold.fundamental_group()
+        return G.SL2C(word)
+
     def in_SU2(self, point):
         gens = self.manifold.fundamental_group().generators()
         A = self.O31(gens[0], point)
@@ -418,10 +431,10 @@ class Holonomizer:
         return matrix([E.gradient(Z) for E in self.glunomials])
 
     def show_R_longitude_evs(self):
-        self.holonomizer.show_R_longitude_evs()
+        R_plot = Plot(self.R_longitude_evs)
 
     def show_T_longitude_evs(self):
-        self.holonomizer.show_T_longitude_evs()
+        T_plot = Plot(self.T_longitude_evs)
 
     def holo_permutation(self):
         return [self.R_fibers[0].points.index(p)
@@ -488,22 +501,23 @@ class PECharVariety:
 
     def build_arcs(self):
         self.arcs = []
+        H = self.holonomizer
         M_args = -arange(self.order, dtype=float64)/self.order
-        M_args = M_args%1
-        for track in self.holonomizer.T_longitude_evs:
+        M_args = 0.5*(M_args%1.0)
+        for m, track in enumerate(self.holonomizer.T_longitude_evs):
             arc = []
             lastL = 0
             for n, ev in enumerate(track):
                 if 0.9999 < abs(ev) < 1.0001:
-                    L = (log(ev).imag/pi)%2.0
-                    if lastL - L > 1 and n > 1:
-                        arc.append(2+L + 1j*M_args[n])
+                    L = (log(ev).imag/(2*pi))%1.0
+                    if lastL - L > 0.5 and n > 0:
+                        arc.append(1.0+L + 1j*M_args[n])
                         arc.append(None)
-                        arc.append(lastL-2 + 1j*M_args[n-1])
-                    elif L - lastL > 1 and n > 1:
-                        arc.append(L-2 + 1j*M_args[n])
+                        arc.append(lastL-1.0 + 1j*M_args[n-1])
+                    elif L - lastL > 0.5 and n > 0:
+                        arc.append(L-1.0 + 1j*M_args[n])
                         arc.append(None)
-                        arc.append(2+lastL + 1j*M_args[n-1])
+                        arc.append(1.0+lastL + 1j*M_args[n-1])
                     arc.append( L + 1j*(M_args[n]%1) )
                     lastL = L
                 else:
@@ -515,36 +529,37 @@ class PECharVariety:
         # Clean up endpoints at the corners of the pillowcase.
         for arc in self.arcs:
             try:
-                if abs(arc[1] - arc[0]) > 0.5:
-                    if abs(arc[1].imag) < .1:
-                        arc[0] = arc[0] - 1j
-                    elif abs(arc[1].imag - 1) < .1:
-                        arc[0] = arc[0] + 1j
-                    if abs(arc[1].real) < .1:
-                        arc[0] = arc[0] - 2
-                    elif abs(arc[1].real - 2) < .1:
-                        arc[0] = arc[0] + 2
-                if abs(arc[-1] - arc[-2]) > 0.5:
-                    if abs(arc[-2].imag) < .1:
-                        arc[-1] = arc[-1] - 1j
-                    elif abs(arc[-2].imag - 1) < .1:
-                        arc[-1] = arc[-1] + 1j
-                    if abs(arc[-2].real) < .1:
-                        arc[-1] = arc[-1] - 2
-                    elif abs(arc[-2].real - 2) < .1:
-                        arc[-1] = arc[-1] + 2
+                if abs(arc[1] - arc[0]) > 0.25:
+                    if abs(arc[1].imag) < 0.05:
+                        arc[0] = arc[0] - 0.5j
+                    elif abs(arc[1].imag) > 0.45:
+                        arc[0] = arc[0] + 0.5j
+                    if abs(arc[1].real) < 0.1:
+                        arc[0] = arc[0] - 1.0
+                    elif abs(arc[1].real) > 0.9:
+                        arc[0] = arc[0] + 1.0
+                if abs(arc[-1] - arc[-2]) > 0.25:
+                    if abs(arc[-2].imag) < 0.05:
+                        arc[-1] = arc[-1] - 0.5j
+                    elif abs(arc[-2].imag) > 0.45:
+                        arc[-1] = arc[-1] + 0.5j
+                    if abs(arc[-2].real) < 0.1:
+                        arc[-1] = arc[-1] - 1.0
+                    elif abs(arc[-2].real ) > 0.9:
+                        arc[-1] = arc[-1] + 1.0
             except TypeError:
                 pass
                         
     def show(self):
+        term = 'aqua' if sys.platform == 'darwin' else 'X11'
         Plot(self.arcs, commands="""
-                    set terminal X11 title "%s" size 1000 500
-                    set xrange [0:2]
-                    set yrange[0:1]
-                    set xtics 1.0
+                    set terminal %s title "%s" size 1000 500
+                    set xrange [0:1]
+                    set yrange[0:0.5]
+                    set xtics 0.5
                     set grid xtics nomxtics
                     set mxtics
-                    """%self.manifold_name, linewidth=2)
+                    """%(term, self.manifold_name), linewidth=2)
     
 class PolyRelation:
     """
@@ -757,22 +772,22 @@ class Apoly:
     A.as_polynomial() returns a string suitable for input to a symbolic
                       algebra program.
     A.show_R_longitude_evs() uses gnuplot to graph the L-projections
-                   of components of the inverse image of the satellite
-                   circle in the M-plane.
+                      of components of the inverse image of the satellite
+                      circle in the M-plane.
     A.show_T_longitude_evs() uses gnuplot to graph the L-projections
-                   of components of the inverse image of the tightened
-                   circle in the M-plane.
+                      of components of the inverse image of the tightened
+                      circle in the M-plane.
     A.show_newton(text=False) shows the newton polygon with dots.  The text
-                              flag shows the coefficients.
+                      flag shows the coefficients.
     A.boundary_slopes() prints the boundary slopes detected by the character
-                        variety.
+                      variety.
     A.save(basename=None, dir='polys', with_hint=True, twist=0)
-                     Saves the polynomial in a .apoly or .gpoly text file for
-                     input to a symbolic computation program.  The directory
-                     can be overridden by specifying dir. Saves the parameters
-                     in a .hint file unless with_hint==False.  Assumes that the
-                     preferred longitude is LM^twist, where L,M are the SnapPea
-                     meridian and longitued
+                      Saves the polynomial in a .apoly or .gpoly text file for
+                      input to a symbolic computation program.  The directory
+                      can be overridden by specifying dir. Saves the parameters
+                      in a .hint file unless with_hint==False.  Assumes that the
+                      preferred longitude is LM^twist, where L,M are the SnapPea
+                      meridian and longitued
     A.verify() runs various consistency checks on the polynomial.
 
     An Apoly object prints itself as a matrix of coefficients.
@@ -1063,10 +1078,10 @@ class Apoly:
         R_plot = Plot(self.holonomizer.R_longitude_evs)
 
     def show_T_longitude_evs(self):
-        R_plot = Plot(self.holonomizer.T_longitude_evs)
+        T_plot = Plot(self.holonomizer.T_longitude_evs)
 
     def show_newton(self, text=False):
-        V = PolyViewer(self.newton_polygon)
+        V = PolyViewer(self.newton_polygon, title=self.mfld_name)
         V.show_sides()
         if text:
             V.show_text()
@@ -1154,7 +1169,7 @@ class NewtonPolygon:
           self.upper_slopes = []
           self.lower_vertices = []
           self.upper_vertices = []
-          self.newton_sides = []
+          self.newton_sides = {}
           self.find_vertices()
 
       def slope(self, v, w):
@@ -1184,7 +1199,7 @@ class NewtonPolygon:
                   for s, j in slopes:
                       if s == slope and -j <= -m:
                           newton_side.append(B[-j])
-                  self.newton_sides.append(newton_side)
+                  self.newton_sides[(slope.x,slope.y)] = newton_side
               n = -m
           n = 0
           while n < len(T) - 1:
@@ -1197,15 +1212,22 @@ class NewtonPolygon:
               self.lower_vertices.append(B[-1])
 
       def side_dicts(self):
-          result = []
-          for side in self.newton_sides:
+          result = {}
+          for slope, side in self.newton_sides.items():
               side_dict = {}
               for i, j in side:
                   side_dict[(j,i)] = self.coeff_dict[(j,i)]
-              result.append(side_dict)
+              result[slope] = side_dict
           return result
-              
+    
+      def puiseux_expansion(self):
+          result = []
+          for slope, side_dict in self.side_dicts().items():
+              P = sage_2poly(dict)
+              m, n = slope
+              result.append(P(t**n,t**m))
 
+        
 class Plot:
     """
     Uses gnuplot to plot a vector or list of vectors.
@@ -1229,8 +1251,7 @@ class Plot:
             self.show_plots()
         else:
             self.create_plot([0])
-#            time.sleep(1)
-#        self.gnuplot.terminate()
+            time.sleep(1)
         
     def __repr__(self):
         return ''
@@ -1278,7 +1299,7 @@ class Plot:
         return
 
 class PolyViewer:
-      def __init__(self, newton_poly, scale=None, margin=50):
+      def __init__(self, newton_poly, title=None, scale=None, margin=50):
           self.NP = newton_poly
           self.columns = 1 + self.NP.support[-1][0]
           self.rows = 1 + max([d[1] for d in self.NP.support])
@@ -1289,6 +1310,8 @@ class PolyViewer:
           self.width = (self.columns - 1)*self.scale + 2*self.margin
           self.height = (self.rows - 1)*self.scale + 2*self.margin
           self.window = Tkinter.Tk()
+          if title:
+              self.window.title(title)
           self.window.wm_geometry('+400+20')
           self.canvas = Tkinter.Canvas(self.window,
                                   bg='white',
@@ -1379,8 +1402,8 @@ class PolyViewer:
 
 winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
 if got_sage:
-    Apoly.sage_poly = lambda self : sage_poly(self.as_polynomial())
-    PolyRelation.sage_poly = lambda self : sage_poly(self.as_polynomial())
+    Apoly.sage_poly = lambda self : sage_2poly(self.as_dict(), ring=QQ['M','L'])
+    PolyRelation.sage_poly = lambda self : sage_poly(self.as_dict())
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
