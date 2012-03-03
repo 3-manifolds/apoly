@@ -1,7 +1,7 @@
-from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones
+from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, complex128, float64, take, arange, where
-from numpy.linalg import svd, norm, eig
+from numpy.linalg import svd, norm, eig, matrix_rank
 from numpy.fft import ifft
 try:
     from numpy import complex256 as big_complex
@@ -408,20 +408,39 @@ class Holonomizer:
 
     def in_SU2(self, point):
         gens = self.manifold.fundamental_group().generators()
-        A = self.O31(gens[0], point)
-        B = self.O31(gens[1], point)
-        M = zeros((4,4), complex128)
-        try:
-            vals, vecs = eig(A)
-            M[:,[0,1]] = vecs[:,[n for n in range(4) if abs(vals[n]-1.0) < 1.0E-10]]
-            vals, vecs = eig(B)
-            M[:,[2,3]] = vecs[:,[n for n in range(4) if abs(vals[n]-1.0) < 1.0E-10]]
-        except:
+        # Check that all generators have real trace in [-2,2]
+        for S in [self.SL2C(g, point) for g in gens]:
+            tr = S[0,0] + S[1,1]
+            if abs(tr.imag) > 1.0E-10:
+                return False
+            if not (abs(tr.real) <= 2.0):
+                return False
+        # Get O31 matrix generators
+        o31matrices = [self.O31(g, point) for g in gens]
+        # Take the first two
+        A, B = o31matrices[:2]
+        # find their axes
+        M = matrix(zeros((4,4)))
+        u, s, v = svd(A - eye(4))
+        vt = transpose(v)
+        M[:,[0,1]] = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        u, s, v = svd(B - eye(4))
+        vt = transpose(v)
+        M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        # Check if the axes cross, and find the fixed point (i.e. line)
+        u, s, v = svd(M)
+        vt = transpose(v)
+        rel = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        if rel.shape != (4,1):
             return False
-        vals, vecs = eig(M)
-        fix = matrix(vecs[:,abs(vals) < 1.0E-10])
-        if fix.shape != (4,1):
+        # We have two descriptions -- average them
+        rel[2] = -rel[2]
+        rel[3] = -rel[3]
+        fix = M*rel
+        # check if the fixed point line is in the light cone
+        if abs(fix[0]) <= norm(fix[1:]):
             return False
+        # check if all other generators fix the same point
         for g in gens[2:]:
             if norm(self.O31(g, point)*fix) > 1.0E-10:
                 return False
@@ -488,7 +507,8 @@ def solve_mod2_system(the_matrix,rhs):
     return S
 
 class PECharVariety:
-    def __init__(self, manifold_name, order=128, radius=1.02, holonomizer=None):
+    def __init__(self, manifold_name, order=128, radius=1.02,
+                 holonomizer=None, check_su2=False):
         self.manifold_name = manifold_name
         if holonomizer is None:
             self.holonomizer = Holonomizer(manifold_name, order=order, radius=radius)
@@ -497,9 +517,9 @@ class PECharVariety:
             self.holonomizer = holonomizer
         self.order = self.holonomizer.order
         self.manifold = self.holonomizer.manifold
-        self.build_arcs()
+        self.build_arcs( check_su2)
 
-    def build_arcs(self):
+    def build_arcs(self, check_su2=False):
         self.arcs = []
         H = self.holonomizer
         M_args = -arange(self.order, dtype=float64)/self.order
@@ -508,13 +528,17 @@ class PECharVariety:
             arc = []
             lastL = 0
             for n, ev in enumerate(track):
-                if 0.9999 < abs(ev) < 1.0001:
+                su2_ok = True
+                if check_su2:
+                    H = self.holonomizer
+                    su2_ok = H.in_SU2(H.T_fibers[n].points[m])
+                if (0.9999 < abs(ev) < 1.0001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
-                    if lastL - L > 0.5 and n > 0:
+                    if lastL - L > 0.5 and len(arc) > 0:
                         arc.append(1.0+L + 1j*M_args[n])
                         arc.append(None)
                         arc.append(lastL-1.0 + 1j*M_args[n-1])
-                    elif L - lastL > 0.5 and n > 0:
+                    elif L - lastL > 0.5 and len(arc) > 0:
                         arc.append(L-1.0 + 1j*M_args[n])
                         arc.append(None)
                         arc.append(1.0+lastL + 1j*M_args[n-1])
