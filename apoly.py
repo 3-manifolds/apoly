@@ -153,10 +153,10 @@ class PHCFibrator:
     """
     A factory for Fibers, computed by PHC.
     """
-    def __init__(self, mfld_name, radius=1.02):
-        self.mfld_name = mfld_name
+    def __init__(self, mfld, radius=1.02):
+        self.manifold = mfld
+        self.mfld_name = mfld.name()
         self.radius = radius
-        self.manifold = Manifold(self.mfld_name)
         self.num_tetrahedra = N = self.manifold.num_tetrahedra()
         variables = ( ['X%s'%n for n in range(N)] +
                       ['Y%s'%n for n in range(N)] )
@@ -240,11 +240,11 @@ class Holonomizer:
     A family of fibers for the meridian holonomy map, lying
     above the Nth roots of unity on the unit circle.  (N=128 by default.)
     """
-    def __init__(self, manifold_name, order=128, radius=1.02):
+    def __init__(self, manifold, order=128, radius=1.02):
         self.order = order
         self.radius = radius
-        self.fibrator = PHCFibrator(manifold_name, radius=radius)
-        self.manifold = manifold = self.fibrator.manifold
+        self.fibrator = PHCFibrator(manifold, radius=radius)
+        self.manifold = manifold
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'The starting fiber contains ideal points.'
@@ -412,8 +412,10 @@ class Holonomizer:
         for S in [self.SL2C(g, point) for g in gens]:
             tr = S[0,0] + S[1,1]
             if abs(tr.imag) > 1.0E-10:
+                #print 'trace not real'
                 return False
-            if not (abs(tr.real) <= 2.0):
+            if abs(tr.real) > 2.0:
+                #print 'trace not in [-2,2]'
                 return False
         # Get O31 matrix generators
         o31matrices = [self.O31(g, point) for g in gens]
@@ -427,22 +429,25 @@ class Holonomizer:
         u, s, v = svd(B - eye(4))
         vt = transpose(v)
         M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
-        # Check if the axes cross, and find the fixed point (i.e. line)
+        # Check if the axes cross, and find the fixed point (i.e. Minkwoski line)
         u, s, v = svd(M)
         vt = transpose(v)
         rel = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
         if rel.shape != (4,1):
+            #print 'linear algebra failure'
             return False
         # We have two descriptions -- average them
         rel[2] = -rel[2]
         rel[3] = -rel[3]
         fix = M*rel
-        # check if the fixed point line is in the light cone
+        # check if the fixed line is in the light cone
         if abs(fix[0]) <= norm(fix[1:]):
+            #print 'fixed line is not in the light cone'
             return False
         # check if all other generators fix the same point
-        for g in gens[2:]:
-            if norm(self.O31(g, point)*fix) > 1.0E-10:
+        for O in o31matrices[2:]:
+            if norm(O*fix - fix) > 1.0e-10:
+                #print 'some generators do not share the fixed point.'
                 return False
         return True
     
@@ -507,11 +512,16 @@ def solve_mod2_system(the_matrix,rhs):
     return S
 
 class PECharVariety:
-    def __init__(self, manifold_name, order=128, radius=1.02,
+    def __init__(self, mfld, order=128, radius=1.02,
                  holonomizer=None, check_su2=False):
-        self.manifold_name = manifold_name
+        if isinstance(mfld, Manifold):
+            self.manifold = mfld
+            self.manifold_name = mfld.name()
+        else:
+            self.manifold = Manifold(mfld)
+            self.manifold_name = mfld
         if holonomizer is None:
-            self.holonomizer = Holonomizer(manifold_name, order=order, radius=radius)
+            self.holonomizer = Holonomizer(self.manifold, order=order, radius=radius)
             self.holonomizer.tighten()
         else:
             self.holonomizer = holonomizer
@@ -530,8 +540,11 @@ class PECharVariety:
             for n, ev in enumerate(track):
                 su2_ok = True
                 if check_su2:
-                    H = self.holonomizer
-                    su2_ok = H.in_SU2(H.T_fibers[n].points[m])
+                    try:
+                        su2_ok = H.in_SU2(H.T_fibers[n].points[m])
+                    except:
+                        #For now, just throw it in so we can look at it.
+                        pass
                 if (0.9999 < abs(ev) < 1.0001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
                     if lastL - L > 0.5 and len(arc) > 0:
@@ -780,8 +793,8 @@ class Apoly:
     """
     The A-polynomial of a SnapPy manifold.  
 
-    Constructor: Apoly(mfld_name, fft_size=128, gluing_form=False, denom=None, multi=False)
-    <mfld_name>      is a manifold name recognized by SnapPy.
+    Constructor: Apoly(mfld, fft_size=128, gluing_form=False, denom=None, multi=False)
+    <mfld>           is a manifold name recognized by SnapPy, or a Manifold instance.
     <gluing_form>    (True/False) indicates whether to find a "standard"
                      A-polynomial, or the gluing variety variant.
     <fft_size>       must be at least twice the M-degree.  Try doubling this
@@ -816,9 +829,14 @@ class Apoly:
 
     An Apoly object prints itself as a matrix of coefficients.
   """
-    def __init__(self, mfld_name, fft_size=128, gluing_form=False,
+    def __init__(self, mfld, fft_size=128, gluing_form=False,
                  radius=1.02, denom=None, multi=False):
-        self.mfld_name = mfld_name
+        if isinstance(mfld, Manifold):
+            self.manifold = mfld
+            self.mfld_name = mfld.name()
+        else:
+            self.mfld_name = mfld
+            self.manifold = Manifold(mfld)
         self.gluing_form = gluing_form
         options = {'fft_size'    : fft_size,
                    'denom'       : denom,
@@ -837,7 +855,7 @@ class Apoly:
         self.denom = options['denom']
         self.multi = options['multi']
         self.radius = options['radius']
-        self.holonomizer = Holonomizer(self.mfld_name, order=self.fft_size,
+        self.holonomizer = Holonomizer(self.manifold, order=self.fft_size,
                                        radius=self.radius)
         if self.gluing_form:
             vals = [array(x) for x in self.holonomizer.R_longitude_holos]
