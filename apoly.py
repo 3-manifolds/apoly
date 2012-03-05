@@ -1,7 +1,7 @@
 from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
-from numpy import dtype, complex128, float64, take, arange, where
-from numpy.linalg import svd, norm, eig, matrix_rank
+from numpy import dtype, complex128, float64, take, arange, sum, where
+from numpy.linalg import svd, norm, eig
 from numpy.fft import ifft
 try:
     from numpy import complex256 as big_complex
@@ -9,6 +9,12 @@ try:
 except ImportError:
     from numpy import complex192 as big_complex
     from numpy import float96 as big_float 
+try:
+    from numpy.linalg import matrix_rank
+except ImportError:
+    def matrixrank(A,tol=1e-8):
+        s = svd(A,compute_uv=0)
+        return sum( where( s>tol, 1, 0 ) )
 from phc import *
 from snappy import *
 from random import random
