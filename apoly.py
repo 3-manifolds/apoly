@@ -537,11 +537,13 @@ class PECharVariety:
 
     def build_arcs(self, check_su2=False):
         self.arcs = []
+        self.arc_info = []
         H = self.holonomizer
         M_args = -arange(self.order, dtype=float64)/self.order
         M_args = 0.5*(M_args%1.0)
         for m, track in enumerate(self.holonomizer.T_longitude_evs):
             arc = []
+            info = []
             lastL = 0
             for n, ev in enumerate(track):
                 su2_ok = True
@@ -562,10 +564,12 @@ class PECharVariety:
                         arc.append(None)
                         arc.append(1.0+lastL + 1j*M_args[n-1])
                     arc.append( L + 1j*(M_args[n]%1) )
+                    info.append( (m,n) )
                     lastL = L
                 else:
                     if len(arc) > 1:
                         self.arcs.append(arc)
+                        self.arc_info.append(info)
                     arc = []
             if arc:
                 self.arcs.append(arc)
