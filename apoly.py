@@ -359,7 +359,8 @@ class Holonomizer:
         return volumes
         
     def find_longitude_traces(self, fiber):
-        trace = lambda rep : rep[0,0] + rep[1,1]
+        # Sage complex numbers do not support attributes .real and .imag :^(((
+        trace = lambda rep : complex(rep[0,0] + rep[1,1])
         traces = []
         for point in fiber.points:
             #  I had to move the dehn_fill((0,0)) inside the loop to get this to
@@ -406,17 +407,11 @@ class Holonomizer:
         G = self.manifold.fundamental_group()
         return G.O31(word)
 
-    def SL2C(self, word, point):
-        self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
-        G = self.manifold.fundamental_group()
-        return G.SL2C(word)
-
     def in_SU2(self, point):
         gens = self.manifold.fundamental_group().generators()
         # Check that all generators have real trace in [-2,2]
         for S in [self.SL2C(g, point) for g in gens]:
-            tr = S[0,0] + S[1,1]
+            tr = complex(S[0,0] + S[1,1])
             if abs(tr.imag) > 1.0E-10:
                 #print 'trace not real'
                 return False
@@ -571,8 +566,10 @@ class PECharVariety:
                         self.arcs.append(arc)
                         self.arc_info.append(info)
                     arc = []
+                    info = []
             if arc:
                 self.arcs.append(arc)
+                self.arc_info.append(info)
         # Clean up endpoints at the corners of the pillowcase.
         for arc in self.arcs:
             try:
