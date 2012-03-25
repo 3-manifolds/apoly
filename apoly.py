@@ -94,7 +94,7 @@ class Glunomial:
         W = 1 - Z
         return self.sign*prod(Z**self.A)*prod(W**self.B)*(self.A/Z - self.B/W)
 
-class Point:
+class ShapeVector:
     """
     A vector of shape parameters, stored as a numpy.array, but
     with an approximate equality operator and distance operator ^.
@@ -138,29 +138,29 @@ class Fiber:
         N = self.system.num_variables()/2
         self.solutions = self.system.solution_list()
         # We only keep the "X" variables.
-        self.points = [Point(S.point[:N]) for S in self.solutions]
+        self.shapes = [ShapeVector(S.point[:N]) for S in self.solutions]
 
     def __len__(self):
         return len(self.solutions)
 
     def __get_item(self, index):
-        return self.points[index]
+        return self.shapes[index]
     
     def __eq__(self, other):
         """
         This ignores multiplicities.
         """
-        for p in self.points:
-            if p not in other.points:
+        for p in self.shapes:
+            if p not in other.shapes:
                 return False
-        for p in other.points:
-            if p not in self.points:
+        for p in other.shapes:
+            if p not in self.shapes:
                 return False
         return True
     
     def collision(self):
-        for n, p in enumerate(self.points):
-            for q in self.points[n+1:]:
+        for n, p in enumerate(self.shapes):
+            for q in self.shapes[n+1:]:
                 if p^q < 1.0E-10:
                     return True
         return False
@@ -169,7 +169,7 @@ class Fiber:
         """
         Check if any cross-ratios are 0 or 1
         """
-        for p in self.points:
+        for p in self.shapes:
             if p.is_degenerate():
                 return False
         return True
@@ -190,7 +190,7 @@ class Fiber:
     def Tillmann_points(self):
         result = []
         for n, s in enumerate(self.solutions):
-            if (s.t != 1.0 or self.points[n].is_degenerate()):
+            if (s.t != 1.0 or self.shapes[n].is_degenerate()):
                 result.append(n)
         return result
     
@@ -373,7 +373,7 @@ class Holonomizer:
     def longidata(self, fiber_list):
         print 'Computing longitude holonomies and eigenvalues.'
         longitude_holonomies = [
-            [self.L_holo(f.points[n]()) for f in fiber_list]
+            [self.L_holo(f.shapes[n]()) for f in fiber_list]
             for n in xrange(self.degree)]
         # Should choose a random fiber, not the first one.
         longitude_traces = self.find_longitude_traces(fiber_list[0])
@@ -392,8 +392,8 @@ class Holonomizer:
     def compute_volumes(self, fiber_list):
         volumes = [ [] for n in range(self.degree) ]
         for fiber in fiber_list:
-            for n, point in enumerate(fiber.points):
-                self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
+            for n, shape in enumerate(fiber.shapes):
+                self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
                 volumes[n].append(self.manifold.volume())
         return volumes
         
@@ -401,14 +401,14 @@ class Holonomizer:
         # Sage complex numbers do not support attributes .real and .imag :^(((
         trace = lambda rep : complex(rep[0,0] + rep[1,1])
         traces = []
-        for point in fiber.points:
+        for shape in fiber.shapes:
             #  I had to move the dehn_fill((0,0)) inside the loop to get this to
             #  work correctly when there is a denominator, e.g. for 8_17.
             #  The values of the longitude traces were coming out wrong.
             #  This was not needed with SnapPeaPython --- SnapPy bug???
             #  Why is it needed at all?
             self.manifold.dehn_fill((0,0))
-            self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
+            self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
             G = self.manifold.fundamental_group()
             longitude = G.peripheral_curves()[0][1]
             relators = G.relators()
@@ -434,22 +434,22 @@ class Holonomizer:
             traces.append(tr)
         return traces
 
-    def SL2C(self, word, point):
+    def SL2C(self, word, shape):
         self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
+        self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
         G = self.manifold.fundamental_group()
         return G.SL2C(word)
 
-    def O31(self, word, point):
+    def O31(self, word, shape):
         self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
+        self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
         G = self.manifold.fundamental_group()
         return G.O31(word)
 
-    def in_SU2(self, point):
+    def in_SU2(self, shape):
         gens = self.manifold.fundamental_group().generators()
         # Check that all generators have real trace in [-2,2]
-        for S in [self.SL2C(g, point) for g in gens]:
+        for S in [self.SL2C(g, shape) for g in gens]:
             tr = complex(S[0,0] + S[1,1])
             if abs(tr.imag) > 1.0E-10:
                 #print 'trace not real'
@@ -458,7 +458,7 @@ class Holonomizer:
                 #print 'trace not in [-2,2]'
                 return False
         # Get O31 matrix generators
-        o31matrices = [self.O31(g, point) for g in gens]
+        o31matrices = [self.O31(g, shape) for g in gens]
         # Take the first two
         A, B = o31matrices[:2]
         # find their axes
@@ -498,8 +498,8 @@ class Holonomizer:
         T_plot = Plot(self.T_longitude_evs)
 
     def holo_permutation(self):
-        return [self.R_fibers[0].points.index(p)
-                for p in self.last_R_fiber.points]
+        return [self.R_fibers[0].shapes.index(p)
+                for p in self.last_R_fiber.shapes]
 
     def holo_orbits(self):
         P = self.holo_permutation()
@@ -580,7 +580,7 @@ class PECharVariety:
                 su2_ok = True
                 if check_su2:
                     try:
-                        su2_ok = H.in_SU2(H.T_fibers[n].points[m])
+                        su2_ok = H.in_SU2(H.T_fibers[n].shapes[m])
                     except:
                         #For now, just throw it in so we can look at it.
                         pass
@@ -826,7 +826,7 @@ class ShapeRelation(list):
         self.holonomizer = H = Holonomizer(manifold_name)
         H.tighten()
         self.shapes = [
-            [[f.points[m][n] for f in H.T_fibers] for m in range(H.degree)]
+            [[f.shapes[m][n] for f in H.T_fibers] for m in range(H.degree)]
             for n in range(H.dim)]
         for shape in self.shapes:
             self.append(PolyRelation(shape, H.T_circle, radius=1.0))
@@ -1493,10 +1493,10 @@ if got_sage:
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
 #          [
-#           Point(array([
+#           ShapeVector(array([
 #            6.18394729421744E-01+5.14863122901458E-02j,
 #            6.18394729421744E-01-5.14863122901458E-02j], dtype=DTYPE)),
-#           Point(array([
+#           ShapeVector(array([
 #            -1.57365927858202E+00+3.47238981119960E-01j,
 #            -1.57365927858202E+00-3.47238981119960E-01j], dtype=DTYPE))
 #          ])
