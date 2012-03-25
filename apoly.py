@@ -43,7 +43,37 @@ def sage_2poly(dict, ring=None):
     
 DTYPE = dtype('c16')
 
+class GluingSystem:
+    """
+    The system of gluing equations for a manifold with specified
+    meridian holonomy.  If the manifold has n tetrahedra, we use the
+    first n-1 edge equations, together with the equation for meridan
+    holonomy.  The left hand side of each equation is a Laurent monomial
+    in z_i and (1-z_i), where z_i are the shape paremeters.  The
+    right hand side of the system is [1,...,1,Hm] where Hm is the
+    value of the meridian holonomy (i.e. the eigenvalue squared)
+    """
+    def __init__(self, manifold):
+        eqns = manifold.gluing_equations('rect')
+        # drop the last edge equation
+        self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
+        self.rhs = [1.0]*(len(eqns) - 3)
+        self.M_holo, self.L_holo = [Glunomial(A, B, c) for A,B,c in eqns[-2:]]
+        self.glunomials.append(self.M_holo)
+
+    def __repr__(self):
+        return '\n'.join([str(G) for G in self.glunomials])
+
+    def jacobian(self, Z):
+        return matrix([G.gradient(Z) for G in self.glunomials])
+
 class Glunomial:
+    """
+    A product of powers of linear terms z_i or (1-z_i), as appears on
+    the left side of a gluing equation.  These are Laurent monomials:
+    powers may be negative.  Instantiate with one of the triples
+    returned by Manifold.gluing_equations('rect').
+    """
     def __init__(self, A, B, c):
         self.A, self.B, self.sign = array(A), array(B), float(c)
 
@@ -56,16 +86,18 @@ class Glunomial:
         return sign + '*'.join(Apowers+Bpowers)
 
     def __call__(self, Z):
-        return self.sign*prod(Z**self.A)*prod((1 - Z)**self.B)
+        W = 1 - Z
+        return self.sign*prod(Z**self.A)*prod(W**self.B)
 
     def gradient(self, Z):
-        return self(Z)*(self.A/Z - self.B/(1 - Z))
+        W = 1 - Z
+        return self.sign*prod(Z**self.A)*prod(W**self.B)*(self.A/Z - self.B/W)
 
 class Point:
     """
-    A numpy array of complex numbers, with its own approximate
-    equality operator.  Instantiate with a sequence of complex
-    numbers.
+    A vector of shape parameters, as a numpy array of complex numbers,
+    with an approximate equality operator.  Instantiate with a
+    sequence of complex numbers.
     """
     def __init__(self, Z):
         self.Z = array(Z)
@@ -79,6 +111,9 @@ class Point:
     def __xor__(self, other):
         return norm(self.Z - other.Z)
 
+    def __call__(self):
+        return self.Z
+    
     def is_degenerate(self):
         return (min(abs(self.Z)) < 1.0E-6
                 or min(abs(self.Z - 1.0)) < 1.0E-6
@@ -122,7 +157,7 @@ class Fiber:
     def collision(self):
         for n, p in enumerate(self.points):
             for q in self.points[n+1:]:
-                if norm(p.Z - q.Z) < 1.0E-10:
+                if p^q < 1.0E-10:
                     return True
         return False
 
@@ -334,7 +369,7 @@ class Holonomizer:
     def longidata(self, fiber_list):
         print 'Computing longitude holonomies and eigenvalues.'
         longitude_holonomies = [
-            [self.L_holo(f.points[n].Z) for f in fiber_list]
+            [self.L_holo(f.points[n]()) for f in fiber_list]
             for n in xrange(self.degree)]
         # Should choose a random fiber, not the first one.
         longitude_traces = self.find_longitude_traces(fiber_list[0])
@@ -354,7 +389,7 @@ class Holonomizer:
         volumes = [ [] for n in range(self.degree) ]
         for fiber in fiber_list:
             for n, point in enumerate(fiber.points):
-                self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+                self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
                 volumes[n].append(self.manifold.volume())
         return volumes
         
@@ -369,7 +404,7 @@ class Holonomizer:
             #  This was not needed with SnapPeaPython --- SnapPy bug???
             #  Why is it needed at all?
             self.manifold.dehn_fill((0,0))
-            self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+            self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
             G = self.manifold.fundamental_group()
             longitude = G.peripheral_curves()[0][1]
             relators = G.relators()
@@ -397,13 +432,13 @@ class Holonomizer:
 
     def SL2C(self, word, point):
         self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+        self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
         G = self.manifold.fundamental_group()
         return G.SL2C(word)
 
     def O31(self, word, point):
         self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(point.Z, fillings=[(0,0)])
+        self.manifold.set_tetrahedra_shapes(point(), fillings=[(0,0)])
         G = self.manifold.fundamental_group()
         return G.O31(word)
 
@@ -452,9 +487,6 @@ class Holonomizer:
                 return False
         return True
     
-    def jacobian(self, Z):
-        return matrix([E.gradient(Z) for E in self.glunomials])
-
     def show_R_longitude_evs(self):
         R_plot = Plot(self.R_longitude_evs)
 
@@ -790,7 +822,7 @@ class ShapeRelation(list):
         self.holonomizer = H = Holonomizer(manifold_name)
         H.tighten()
         self.shapes = [
-            [[f.points[m].Z[n] for f in H.T_fibers] for m in range(H.degree)]
+            [[f.points[m]()[n] for f in H.T_fibers] for m in range(H.degree)]
             for n in range(H.dim)]
         for shape in self.shapes:
             self.append(PolyRelation(shape, H.T_circle, radius=1.0))
