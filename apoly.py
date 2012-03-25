@@ -1,3 +1,4 @@
+import numpy
 from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, complex128, float64, take, arange, sum, where
@@ -95,29 +96,32 @@ class Glunomial:
 
 class Point:
     """
-    A vector of shape parameters, as a numpy array of complex numbers,
-    with an approximate equality operator.  Instantiate with a
-    sequence of complex numbers.
+    A vector of shape parameters, stored as a numpy.array, but
+    with an approximate equality operator and distance operator ^.
+    Instantiate with a sequence of complex numbers.  To access
+    the underlying array, call as a function.
     """
-    def __init__(self, Z):
-        self.Z = array(Z)
+    def __init__(self, values):
+        self.array = array(values)
+        self.__repr__ = self.__str__ = self.array.__str__
+        self.__getitem__ = self.array.__getitem__
+        self.__len__ = self.array.__len__
         
-    def __repr__(self):
-        return str(self.Z)
-
     def __eq__(self, other):
-        return norm(self.Z - other.Z) < 1.0E-10
+        return norm(self.array - other.array) < 1.0E-10
 
     def __xor__(self, other):
-        return norm(self.Z - other.Z)
+        return norm(self.array - other.array)
 
     def __call__(self):
-        return self.Z
+        return self.array
     
     def is_degenerate(self):
-        return (min(abs(self.Z)) < 1.0E-6
-                or min(abs(self.Z - 1.0)) < 1.0E-6
-                or max(abs(self.Z)) > 1.0E6)
+        moduli = abs(self.array)
+        return ( (moduli < 1.0E-6).any() or
+                 (moduli < 1.0E-6).any() or
+                 (moduli > 1.0E6).any()
+                 )
     
 class Fiber:
     """
@@ -166,7 +170,7 @@ class Fiber:
         Check if any cross-ratios are 0 or 1
         """
         for p in self.points:
-            if not p.is_degenerate:
+            if p.is_degenerate():
                 return False
         return True
             
@@ -288,7 +292,7 @@ class Holonomizer:
         self.manifold = manifold
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
-            raise RuntimeError, 'The starting fiber contains ideal points.'
+            raise RuntimeError, 'The starting fiber contains Tillmann points.'
         self.degree = len(self.base_fiber)
         print 'Degree is %s.'%self.degree
         # pre-initialize
@@ -822,7 +826,7 @@ class ShapeRelation(list):
         self.holonomizer = H = Holonomizer(manifold_name)
         H.tighten()
         self.shapes = [
-            [[f.points[m]()[n] for f in H.T_fibers] for m in range(H.degree)]
+            [[f.points[m][n] for f in H.T_fibers] for m in range(H.degree)]
             for n in range(H.dim)]
         for shape in self.shapes:
             self.append(PolyRelation(shape, H.T_circle, radius=1.0))
