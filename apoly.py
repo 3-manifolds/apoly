@@ -46,27 +46,38 @@ DTYPE = dtype('c16')
 
 class GluingSystem:
     """
-    The system of gluing equations for a manifold with specified
+    The system of gluing equations for a manifold, with specified
     meridian holonomy.  If the manifold has n tetrahedra, we use the
-    first n-1 edge equations, together with the equation for meridan
+    first n-1 edge equations, together with the equation for meridian
     holonomy.  The left hand side of each equation is a Laurent monomial
     in z_i and (1-z_i), where z_i are the shape paremeters.  The
     right hand side of the system is [1,...,1,Hm] where Hm is the
-    value of the meridian holonomy (i.e. the eigenvalue squared)
+    the meridian holonomy (i.e. eigenvalue squared).
     """
     def __init__(self, manifold):
         eqns = manifold.gluing_equations('rect')
         # drop the last edge equation
         self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
         self.rhs = [1.0]*(len(eqns) - 3)
-        self.M_holo, self.L_holo = [Glunomial(A, B, c) for A,B,c in eqns[-2:]]
-        self.glunomials.append(self.M_holo)
+        self.M_nomial, self.L_nomial = [Glunomial(A, B, c) for A,B,c in eqns[-2:]]
+        self.glunomials.append(self.M_nomial)
 
     def __repr__(self):
         return '\n'.join([str(G) for G in self.glunomials])
 
+    def __call__(self, Z):
+        return transpose(matrix([G(Z) for G in self.glunomials]))
+    
     def jacobian(self, Z):
         return matrix([G.gradient(Z) for G in self.glunomials])
+
+    def M_holonomy(self, Z):
+        return self.M_nomial(Z)
+    
+    def condition(self, Z):
+        U, D, V = svd(self.jacobian(Z))
+        return D[0]/D[-1]
+
 
 class Glunomial:
     """
