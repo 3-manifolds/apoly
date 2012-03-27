@@ -1,15 +1,9 @@
 import numpy
 from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
-from numpy import dtype, complex128, float64, take, arange, sum, where
+from numpy import dtype, take, arange, sum, where, vstack
 from numpy.linalg import svd, norm, eig
 from numpy.fft import ifft
-try:
-    from numpy import complex256 as big_complex
-    from numpy import float128 as big_float
-except ImportError:
-    from numpy import complex192 as big_complex
-    from numpy import float96 as big_float 
 try:
     from numpy.linalg import matrix_rank
 except ImportError:
@@ -66,7 +60,7 @@ class GluingSystem:
         return '\n'.join([str(G) for G in self.glunomials])
 
     def __call__(self, Z):
-        return transpose(matrix([G(Z) for G in self.glunomials]))
+        return vstack([G(Z) for G in self.glunomials])
     
     def jacobian(self, Z):
         return matrix([G.gradient(Z) for G in self.glunomials])
@@ -946,6 +940,7 @@ class Apoly:
             if max(abs(coefficient_array[rows-1])) > 0:
                 break
             rows -= 1
+        # This failed on 9_39 -- needs to remove empty rows
         self.coefficients = coefficient_array[:rows]
         self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
@@ -1125,6 +1120,7 @@ class Apoly:
                 terms.append(term.replace('+ -','- '))
         return name + ' :=\n' + '\n'.join(terms)
 
+    # this is broken.  Need to define self.apoly_dir, A.hint_dir
     def save(self, basename=None, dir=None, with_hint=True, twist=0):
         if dir == None:
             if self.gluing_form:
@@ -1158,10 +1154,10 @@ class Apoly:
         if with_hint:
             hintfile = open(hintfile_name,'w')
             hintfile.write('hint={\n')
-            hintfile.write('"radius" : %f,\n'%self.lift.radius)
-            hintfile.write('"fft_size" : %d,\n'%self.lift.fft_size)
+            hintfile.write('"radius" : %f,\n'%self.radius)
+            hintfile.write('"fft_size" : %d,\n'%self.fft_size)
             if not self.lift.multi:
-                hintfile.write('"multi" : %s,\n'%self.lift.multi)
+                hintfile.write('"multi" : %s,\n'%self.multi)
             if self.denom:
                 hintfile.write('"denom" : "%s",\n'%self.denom)
             hintfile.write('}\n')
@@ -1339,7 +1335,12 @@ class Plot:
             self.data = data
         else:
             self.data = [data]
-        self.type = type(self.data[0][0])
+        duck = data[0][0]
+        self.type = type(duck)
+        if 'complex' in str(self.type):
+            self.type = 'complex'
+        elif 'float' in str(self.type):
+            self.type = 'float'
         self.gnuplot = Popen(['gnuplot', '-geometry 800x720+200+0'],
                              shell=True,
                              stdin=PIPE)
@@ -1357,12 +1358,12 @@ class Plot:
         for n in funcs:
             spec.append('"-" t "%d" w %s lw %s'%(n, self.style, self.linewidth))
         gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
-        if self.type == complex128 or self.type == big_complex or self.type == complex:
+        if self.type == 'complex':
             for n in funcs:
                 gnuplot_input += '\n'.join([
                     '%f %f'%(point.real, point.imag) if point is not None else ''
                     for point in self.data[n]] + ['e\n']) 
-        elif self.type == float64 or self.type == big_float or self.type == float:
+        elif self.type == 'float':
             for n in funcs:
                 gnuplot_input += '\n'.join(
                     ['%f'%point for point in self.data[n]] + ['e\n']) 
