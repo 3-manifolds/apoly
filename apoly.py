@@ -4,7 +4,7 @@ from numpy import dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, take, arange, sum, where, vstack
 from numpy import float64
-from numpy.linalg import svd, norm, eig
+from numpy.linalg import svd, norm, eig, solve
 from numpy.fft import ifft
 try:
     from numpy.linalg import matrix_rank
@@ -54,7 +54,6 @@ class GluingSystem:
         eqns = manifold.gluing_equations('rect')
         # drop the last edge equation
         self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
-        self.rhs = [1.0]*(len(eqns) - 3)
         self.M_nomial, self.L_nomial = [Glunomial(A, B, c) for A,B,c in eqns[-2:]]
         self.glunomials.append(self.M_nomial)
 
@@ -62,7 +61,10 @@ class GluingSystem:
         return '\n'.join([str(G) for G in self.glunomials])
 
     def __call__(self, Z):
-        return vstack([G(Z) for G in self.glunomials])
+        return array([G(Z) for G in self.glunomials])
+
+    def __len__(self):
+        return len(self.glunomials)
     
     def jacobian(self, Z):
         return matrix([G.gradient(Z) for G in self.glunomials])
@@ -71,14 +73,48 @@ class GluingSystem:
         return self.M_nomial(Z)
     
     def condition(self, Z):
+        """
+        Return the condition number of the Jacobian of this system
+        at the point Z.
+        """
         U, D, V = svd(self.jacobian(Z))
         return D[0]/D[-1]
 
-    def newton_step(self, Z, target):
+    def newton_step(self, Z, M_target):
+        """
+        Do one iteration of Newton's method, starting at Z and aiming
+        to solve G(z) = (1,1,...,M_target).  Returns a triple
+        Z', step_size, residual.
+        """
         J = self.jacobian(Z)
-        rhs = vstack([ones((len(Z)-1,1)), target]) - self(Z)
-        dZ = solve(J,rhs)
-        return Z + dZ
+        target = ones(len(self), dtype=DTYPE)
+        target[-1] = M_target
+        dZ = solve(J, target - self(Z))
+        step_size = norm(dZ)
+        residual = norm(target - self(Z))
+        return Z + dZ, step_size, residual
+
+    def newton1(self, Z, M_target):
+        """
+        Simple version of newton's method.  Does not adjust step sizes.
+        The iteration is terminated if:
+          * the residual does not decrease by at least a factor of 2; or
+          * the step size is smaller than 1.0E-15
+          * more than 10 iterations have been attempted
+        This appears to be OK if the condition number is < 50
+        """
+        prev_residual = step_size = 1.0E5
+        Zn, count = Z, 1
+        while True:
+            Zn, step_size, residual = self.newton_step(Zn, M_target)
+            print count, residual, step_size
+            if (step_size < 1.0E-15 or
+                residual > 0.5*prev_residual or
+                count > 10):
+                break
+            prev_residual = residual
+            count += 1
+        return Zn
 
 class Glunomial:
     """
