@@ -163,13 +163,7 @@ class GluingSystem:
         Zn, residual = self.newton1(Z, M_target)
         if residual < 5.0E-15:
             return Zn
-        # If that fails, try using least squares
-        print 'using least squares'
-        Zn, residual = self.newton2(Z, M_target)
-        if residual < 5.0E-15:
-            return Zn
-        # OK, we cannot jump straight to the solution.  So try
-        # taking baby steps.
+        # If that fails, try taking baby steps.
         print 'taking baby steps'
         subdivisions = 2
         M_start = self(Z)[-1]
