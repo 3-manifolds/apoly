@@ -4,7 +4,7 @@ from numpy import dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, take, arange, sum, where, vstack
 from numpy import float64
-from numpy.linalg import svd, norm, eig, solve
+from numpy.linalg import svd, norm, eig, solve, lstsq
 from numpy.fft import ifft
 try:
     from numpy.linalg import matrix_rank
@@ -84,12 +84,28 @@ class GluingSystem:
         """
         Do one iteration of Newton's method, starting at Z and aiming
         to solve G(z) = (1,1,...,M_target).  Returns a triple
-        Z', step_size, residual.
+        Z', step_size, residual.  Solves the linear system by 
+        LU factorization (not suitable for nearly singular systems).
         """
         J = self.jacobian(Z)
         target = ones(len(self), dtype=DTYPE)
         target[-1] = M_target
         dZ = solve(J, target - self(Z))
+        step_size = norm(dZ)
+        residual = norm(target - self(Z))
+        return Z + dZ, step_size, residual
+    
+    def newton_step_ls(self, Z, M_target):
+        """
+        Do one iteration of Newton's method, starting at Z and aiming
+        to solve G(z) = (1,1,...,M_target).  Returns a triple
+        Z', step_size, residual.  Finds a least squares approcimate
+        solution to the linear system.
+        """
+        J = self.jacobian(Z)
+        target = ones(len(self), dtype=DTYPE)
+        target[-1] = M_target
+        dZ, residues, rank, sing = lstsq(J, target - self(Z))
         step_size = norm(dZ)
         residual = norm(target - self(Z))
         return Z + dZ, step_size, residual
@@ -101,7 +117,6 @@ class GluingSystem:
           * the residual does not decrease by at least a factor of 2; or
           * the step size is smaller than 1.0E-15
           * more than 10 iterations have been attempted
-        This appears to be OK if the condition number is < 50
         """
         prev_residual = step_size = 1.0E5
         Zn, count = Z, 1
@@ -114,8 +129,64 @@ class GluingSystem:
                 break
             prev_residual = residual
             count += 1
-        return Zn
+        return Zn, residual
 
+    def newton2(self, Z, M_target):
+        """
+        Simple version of newton's method using a least squares solution
+        to the linear system.  Does not adjust step sizes.
+        The iteration is terminated if:
+          * the residual does not decrease by at least a factor of 2; or
+          * the step size is smaller than 1.0E-15
+          * more than 10 iterations have been attempted
+        """
+        prev_residual = step_size = 1.0E5
+        Zn, count = Z, 1
+        while True:
+            Zn, step_size, residual = self.newton_step_ls(Zn, M_target)
+            print count, residual, step_size
+            if (step_size < 1.0E-15 or
+                residual > 0.5*prev_residual or
+                count > 10):
+                break
+            prev_residual = residual
+            count += 1
+        return Zn, residual
+
+    def track(self, Z, M_target):
+        """
+        Track solutions of the gluing system starting at Z and
+        ending at a solution where the meridian holonomy takes the
+        specified value.
+        """
+        # First try the cheap and easy method
+        Zn, residual = self.newton1(Z, M_target)
+        if residual < 5.0E-15:
+            return Zn
+        # If that fails, try using least squares
+        print 'using least squares'
+        Zn, residual = self.newton2(Z, M_target)
+        if residual < 5.0E-15:
+            return Zn
+        # OK, we cannot jump straight to the solution.  So try
+        # taking baby steps.
+        print 'taking baby steps'
+        subdivisions = 2
+        M_start = self(Z)[-1]
+        delta = M_target - M_start
+        while subdivisions < 1024:
+            print '%s subdivisions'%subdivisions
+            Zn = Z
+            for n in range(subdivisions):
+                baby_target = M_start + delta*(n+1)/subdivisions
+                Zn, residual = self.newton2(Zn, baby_target)
+                if residual > 5.0E-15:
+                    break
+            if residual < 5.0E-15:
+                return Zn
+            else:
+                subdivisions *= 2
+    
 class Glunomial:
     """
     A product of powers of linear terms z_i or (1-z_i), as appears on
