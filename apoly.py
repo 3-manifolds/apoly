@@ -1,7 +1,9 @@
 import numpy
-from numpy import array, matrix, ndarray, dot, prod, diag, transpose, zeros, ones, eye
+from numpy import array, matrix, ndarray
+from numpy import dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
 from numpy import dtype, take, arange, sum, where, vstack
+from numpy import float64
 from numpy.linalg import svd, norm, eig
 from numpy.fft import ifft
 try:
@@ -72,6 +74,11 @@ class GluingSystem:
         U, D, V = svd(self.jacobian(Z))
         return D[0]/D[-1]
 
+    def newton_step(self, Z, target):
+        J = self.jacobian(Z)
+        rhs = vstack([ones((len(Z)-1,1)), target]) - self(Z)
+        dZ = solve(J,rhs)
+        return Z + dZ
 
 class Glunomial:
     """
@@ -878,7 +885,8 @@ class Apoly:
     An Apoly object prints itself as a matrix of coefficients.
   """
     def __init__(self, mfld, fft_size=128, gluing_form=False,
-                 radius=1.02, denom=None, multi=False):
+                 radius=1.02, denom=None, multi=False,
+                 apoly_dir='apolys', gpoly_dir='gpolys', hint_dir='hints'):
         if isinstance(mfld, Manifold):
             self.manifold = mfld
             self.mfld_name = mfld.name()
@@ -889,7 +897,10 @@ class Apoly:
         options = {'fft_size'    : fft_size,
                    'denom'       : denom,
                    'multi'       : multi,
-                   'radius'      : radius}
+                   'radius'      : radius,
+                   'apoly_dir'   : apoly_dir,
+                   'gpoly_dir'   : gpoly_dir,
+                   'hint_dir'    : hint_dir}
 #        if (fft_size, radius, denom, multi) == (128, None, None, False):
 #            print "Checking for hints ...",
 #            hintfile = os.path.join(self.hint_dir, mfld_name+'.hint')
@@ -903,6 +914,9 @@ class Apoly:
         self.denom = options['denom']
         self.multi = options['multi']
         self.radius = options['radius']
+        self.apoly_dir = options['apoly_dir']
+        self.gpoly_dir = options['gpoly_dir']
+        self.hint_dir = options['hint_dir']
         self.holonomizer = Holonomizer(self.manifold, order=self.fft_size,
                                        radius=self.radius)
         if self.gluing_form:
@@ -1120,7 +1134,6 @@ class Apoly:
                 terms.append(term.replace('+ -','- '))
         return name + ' :=\n' + '\n'.join(terms)
 
-    # this is broken.  Need to define self.apoly_dir, A.hint_dir
     def save(self, basename=None, dir=None, with_hint=True, twist=0):
         if dir == None:
             if self.gluing_form:
