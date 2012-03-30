@@ -122,7 +122,7 @@ class GluingSystem:
         Zn, count = Z, 1
         while True:
             Zn, step_size, residual = self.newton_step(Zn, M_target)
-            print count, residual, step_size
+#            print count, residual, step_size
             if (step_size < 1.0E-15 or
                 residual > 0.5*prev_residual or
                 count > 10):
@@ -144,7 +144,7 @@ class GluingSystem:
         Zn, count = Z, 1
         while True:
             Zn, step_size, residual = self.newton_step_ls(Zn, M_target)
-            print count, residual, step_size
+#            print count, residual, step_size
             if (step_size < 1.0E-15 or
                 residual > 0.5*prev_residual or
                 count > 10):
@@ -159,27 +159,35 @@ class GluingSystem:
         ending at a solution where the meridian holonomy takes the
         specified value.
         """
-        # First try the cheap and easy method
+        # First we try the cheap and easy method
         Zn, residual = self.newton1(Z, M_target)
         if residual < 5.0E-15:
             return Zn
         # If that fails, try taking baby steps.
-        print 'taking baby steps'
-        subdivisions = 2
+#        print 'taking baby steps'
         M_start = self(Z)[-1]
-        delta = M_target - M_start
-        while subdivisions < 1024:
-            print '%s subdivisions'%subdivisions
-            Zn = Z
-            for n in range(subdivisions):
-                baby_target = M_start + delta*(n+1)/subdivisions
-                Zn, residual = self.newton2(Zn, baby_target)
-                if residual > 5.0E-15:
-                    break
+        T, dT = 0.0, 0.5
+        delta = (M_target - M_start)
+        Zlast = Z
+        success = 0
+        while T < 1.0:
+            baby_target = M_start + min(T+dT, 1.0)*delta
+            Zn, residual = self.newton2(Zlast, baby_target)
             if residual < 5.0E-15:
-                return Zn
+                Zlast = Zn
+                if success > 3:
+                    success = 0
+                    dT *= 2
+                else:
+                    success += 1
+                T += dT
+                continue
             else:
-                subdivisions *= 2
+                success = 0
+                dT /= 2
+                if dT < 1.0E-10:
+                    raise NewtonFailure
+        return Zlast
     
 class Glunomial:
     """

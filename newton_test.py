@@ -19,11 +19,15 @@ def R_test(V):
         zz = G.newton2(z, t) 
 
 def track_test(V):
+    start_time = time.time()
     H = V.holonomizer
     G = GluingSystem(V.manifold)
+    steps = []
     for n in range(1,128):
-        print '>>>>', n
+#        print '>>>>', n
         z = H.R_fibers[n-1].shapes[0]()
-        print 'condition: %f'%G.condition(z)
+#        print 'condition: %f'%G.condition(z)
         t = H.R_circle[n]
-        zz = G.track(z, t) 
+        steps.append(G.track(z, t))
+    print time.time() - start_time
+    return steps
