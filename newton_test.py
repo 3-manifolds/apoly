@@ -56,3 +56,10 @@ def tighten_test(V, point=0, debug=True):
     print time.time() - start_time
     return steps
 
+def big_track(V):
+    N = len(V.holonomizer.T_fibers[0].shapes)
+    start = time.time()
+    for n in range(N):
+        print n
+        P = track_test(V, n, debug=False)
+    print time.time() - start

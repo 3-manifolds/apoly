@@ -94,7 +94,7 @@ class GluingSystem:
         Do one iteration of Newton's method, starting at Z and aiming
         to solve G(z) = (1,1,...,M_target).  Returns a triple:
         Z', step_size, residual.  Solves the linear system by 
-        LU factorization (not suitable for nearly singular systems).
+        LU factorization (not great for nearly singular systems).
         """
         J = self.jacobian(Z)
         target = ones(len(self), dtype=DTYPE)
@@ -109,7 +109,7 @@ class GluingSystem:
         Do one iteration of Newton's method, starting at Z and aiming
         to solve G(z) = (1,1,...,M_target). Returns a pair:
         dZ, (1,1,...,M_target).  Finds a least squares approcimate
-        solution to the linear system.  This is stable with nearly
+        solution to the linear system.  This method is stable with nearly
         singular systems.
         """
         J = self.jacobian(Z)
@@ -144,9 +144,10 @@ class GluingSystem:
 
     def newton2(self, Z, M_target, debug=False):
         """
-        Fancier version of Newton's method using a least squares solution
-        to the linear system.  To avoid overshooting, step sizes are
-        adjusted by an Armijo rule that successively halves the step.
+        Fancier version of Newton's method which uses a least squares
+        solution to the linear system.  To avoid overshooting, step
+        sizes are adjusted by an Armijo rule that successively halves
+        the step size.
         The iteration is terminated if:
           * the residual does not decrease; or
           * the step size is smaller than 1.0E-15
@@ -156,16 +157,15 @@ class GluingSystem:
         prev_Z, count = Z, 1
         while True:
             dZ, target = self.newton_step_ls(prev_Z, M_target)
-            Zn = prev_Z + dZ
-            residual = max(abs(target - self(Zn)))
             t = 1.0
             for k in range(8):
                 Zn = prev_Z + t*dZ
                 residual = max(abs(target - self(Zn)))
-                if residual > prev_residual:
+                if residual < prev_residual:
+                    break
+                else:
                     t *= 0.5
-                    continue
-            if debug: print 'scaled dt by %s; residual: %s'%(t, residual)
+            if debug: print 'scaled dZ by %s; residual: %s'%(t, residual)
             if residual > prev_residual:
                 if debug: print 'Armijo failed with t=%s'%t
                 return prev_Z, prev_residual
@@ -203,14 +203,14 @@ class GluingSystem:
                 if success > 3:
                     success = 0
                     dT *= 2
-                    if debug: print 'Step increased to %f'%dT
+                    if debug: print 'Track step increased to %f'%dT
                 else:
                     success += 1
                 T += dT
             else:
                 success = 0
                 dT /= 2
-                if debug: print 'Step reduced to %f; condition = %s'%(
+                if debug: print 'Track step reduced to %f; condition = %s'%(
                         dT,
                         self.condition(prev_Z))
                 if dT < 1.0/(2.0**16):
