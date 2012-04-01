@@ -18,16 +18,41 @@ def R_test(V):
         t = H.R_circle[n]
         zz = G.newton2(z, t) 
 
-def track_test(V):
+def track_test(V, point=0, debug=True):
     start_time = time.time()
     H = V.holonomizer
     G = GluingSystem(V.manifold)
     steps = []
     for n in range(1,128):
-#        print '>>>>', n
-        z = H.R_fibers[n-1].shapes[0]()
-#        print 'condition: %f'%G.condition(z)
+        if debug: print '>>>>', n
+        z = H.R_fibers[n-1].shapes[point]()
+        cond = G.condition(z)
+        if debug: print '1/conditions: %f %f'%(1/cond[0], 1/cond[1])
         t = H.R_circle[n]
-        steps.append(G.track(z, t))
+        try:
+            steps.append(G.track(z, t, debug))
+        except ValueError,e:
+            print e
+            break
     print time.time() - start_time
     return steps
+
+def tighten_test(V, point=0, debug=True):
+    start_time = time.time()
+    H = V.holonomizer
+    G = GluingSystem(V.manifold)
+    steps = []
+    for n in range(128):
+        if debug: print '>>>>', n
+        z = H.R_fibers[n].shapes[point]()
+        cond = G.condition(z)
+        if debug: print 'condition: %f %f'%cond
+        t = H.T_circle[n]
+        try:
+            steps.append(G.track(z, t))
+        except ValueError,e:
+            print e
+            break
+    print time.time() - start_time
+    return steps
+

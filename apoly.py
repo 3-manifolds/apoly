@@ -17,6 +17,11 @@ from snappy import *
 from random import random
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
+
+# Constants for Newton method
+RESIDUAL_BOUND = 1.0E-14
+STEPSIZE_BOUND = 1.0E-14
+
 got_sage = False
 try:
     from sage.all import polygen, polygens, QQ, CC
@@ -48,7 +53,7 @@ class GluingSystem:
     holonomy.  The left hand side of each equation is a Laurent monomial
     in z_i and (1-z_i), where z_i are the shape paremeters.  The
     right hand side of the system is [1,...,1,Hm] where Hm is the
-    the meridian holonomy (i.e. eigenvalue squared).
+    the meridian holonomy (i.e. the first eigenvalue squared).
     """
     def __init__(self, manifold):
         eqns = manifold.gluing_equations('rect')
@@ -74,16 +79,20 @@ class GluingSystem:
     
     def condition(self, Z):
         """
-        Return the condition number of the Jacobian of this system
+        Return the condition numbers of the Jacobians for the defining
+        equations of the gluing curve and of the entire system
         at the point Z.
         """
+        U, D, V = svd(self.jacobian(Z)[:-1])
+        curve = D[0]/D[-1]
         U, D, V = svd(self.jacobian(Z))
-        return D[0]/D[-1]
-
+        system = D[0]/D[-1]
+        return curve, system
+    
     def newton_step(self, Z, M_target):
         """
         Do one iteration of Newton's method, starting at Z and aiming
-        to solve G(z) = (1,1,...,M_target).  Returns a triple
+        to solve G(z) = (1,1,...,M_target).  Returns a triple:
         Z', step_size, residual.  Solves the linear system by 
         LU factorization (not suitable for nearly singular systems).
         """
@@ -92,68 +101,83 @@ class GluingSystem:
         target[-1] = M_target
         dZ = solve(J, target - self(Z))
         step_size = norm(dZ)
-        residual = norm(target - self(Z))
-        return Z + dZ, step_size, residual
+        Zn = Z + dZ
+        return Zn, step_size, max(abs(target - self(Zn)))
     
     def newton_step_ls(self, Z, M_target):
         """
         Do one iteration of Newton's method, starting at Z and aiming
-        to solve G(z) = (1,1,...,M_target).  Returns a triple
-        Z', step_size, residual.  Finds a least squares approcimate
-        solution to the linear system.
+        to solve G(z) = (1,1,...,M_target). Returns a pair:
+        dZ, (1,1,...,M_target).  Finds a least squares approcimate
+        solution to the linear system.  This is stable with nearly
+        singular systems.
         """
         J = self.jacobian(Z)
         target = ones(len(self), dtype=DTYPE)
         target[-1] = M_target
-        dZ, residues, rank, sing = lstsq(J, target - self(Z))
-        step_size = norm(dZ)
-        residual = norm(target - self(Z))
-        return Z + dZ, step_size, residual
+        error = target - self(Z)
+        dZ, residues, rank, sing = lstsq(J, error)
+        return dZ, target
 
-    def newton1(self, Z, M_target):
+    def newton1(self, Z, M_target, debug=False):
         """
-        Simple version of newton's method.  Does not adjust step sizes.
+        Simple version of Newton's method.  Uses the LU decomposition to
+        solve the linear system.  Does not adjust step sizes.
         The iteration is terminated if:
-          * the residual does not decrease by at least a factor of 2; or
+          * the residual does not decrease; or
           * the step size is smaller than 1.0E-15
           * more than 10 iterations have been attempted
         """
         prev_residual = step_size = 1.0E5
-        Zn, count = Z, 1
+        prev_Z, count = Z, 1
         while True:
-            Zn, step_size, residual = self.newton_step(Zn, M_target)
-#            print count, residual, step_size
-            if (step_size < 1.0E-15 or
-                residual > 0.5*prev_residual or
+            Zn, step_size, residual = self.newton_step(prev_Z, M_target)
+            if debug: print count, residual, step_size
+            if residual > prev_residual:
+                return prev_Z, prev_residual
+            if (step_size < STEPSIZE_BOUND or
+                residual < RESIDUAL_BOUND or
                 count > 10):
-                break
-            prev_residual = residual
+                return Zn, residual
+            prev_Z, prev_residual = Zn, residual
             count += 1
-        return Zn, residual
 
-    def newton2(self, Z, M_target):
+    def newton2(self, Z, M_target, debug=False):
         """
-        Simple version of newton's method using a least squares solution
-        to the linear system.  Does not adjust step sizes.
+        Fancier version of Newton's method using a least squares solution
+        to the linear system.  To avoid overshooting, step sizes are
+        adjusted by an Armijo rule that successively halves the step.
         The iteration is terminated if:
-          * the residual does not decrease by at least a factor of 2; or
+          * the residual does not decrease; or
           * the step size is smaller than 1.0E-15
           * more than 10 iterations have been attempted
         """
         prev_residual = step_size = 1.0E5
-        Zn, count = Z, 1
+        prev_Z, count = Z, 1
         while True:
-            Zn, step_size, residual = self.newton_step_ls(Zn, M_target)
-#            print count, residual, step_size
-            if (step_size < 1.0E-15 or
-                residual > 0.5*prev_residual or
+            dZ, target = self.newton_step_ls(prev_Z, M_target)
+            Zn = prev_Z + dZ
+            residual = max(abs(target - self(Zn)))
+            t = 1.0
+            for k in range(8):
+                Zn = prev_Z + t*dZ
+                residual = max(abs(target - self(Zn)))
+                if residual > prev_residual:
+                    t *= 0.5
+                    continue
+            if debug: print 'scaled dt by %s; residual: %s'%(t, residual)
+            if residual > prev_residual:
+                if debug: print 'Armijo failed with t=%s'%t
+                return prev_Z, prev_residual
+            step_size = norm(t*dZ)
+            if (step_size < STEPSIZE_BOUND or
+                residual < RESIDUAL_BOUND or
                 count > 10):
-                break
-            prev_residual = residual
+                return Zn, residual
+            prev_Z, prev_residual = Zn, residual
             count += 1
-        return Zn, residual
 
-    def track(self, Z, M_target):
+    def track(self, Z, M_target, debug=False):
         """
         Track solutions of the gluing system starting at Z and
         ending at a solution where the meridian holonomy takes the
@@ -161,33 +185,37 @@ class GluingSystem:
         """
         # First we try the cheap and easy method
         Zn, residual = self.newton1(Z, M_target)
-        if residual < 5.0E-15:
+        if residual < 1.0E-14: # What is a good threshold here?
             return Zn
         # If that fails, try taking baby steps.
-#        print 'taking baby steps'
+        if debug: print 'Taking baby steps ...'
         M_start = self(Z)[-1]
         T, dT = 0.0, 0.5
         delta = (M_target - M_start)
-        Zlast = Z
+        prev_Z = Z
         success = 0
         while T < 1.0:
+            if debug: print 'T = %f'%T
             baby_target = M_start + min(T+dT, 1.0)*delta
-            Zn, residual = self.newton2(Zlast, baby_target)
-            if residual < 5.0E-15:
-                Zlast = Zn
+            Zn, residual = self.newton2(prev_Z, baby_target, debug=debug)
+            if residual < 1.0E-12:
+                prev_Z = Zn
                 if success > 3:
                     success = 0
                     dT *= 2
+                    if debug: print 'Step increased to %f'%dT
                 else:
                     success += 1
                 T += dT
-                continue
             else:
                 success = 0
                 dT /= 2
-                if dT < 1.0E-10:
-                    raise NewtonFailure
-        return Zlast
+                if debug: print 'Step reduced to %f; condition = %s'%(
+                        dT,
+                        self.condition(prev_Z))
+                if dT < 1.0/(2.0**16):
+                    raise ValueError, 'Track failed: step size limit reached.'
+        return Zn
     
 class Glunomial:
     """
@@ -426,7 +454,9 @@ class Holonomizer:
         self.rhs = [1.0]*(len(eqns) - 3)
         self.M_holo, self.L_holo = [Glunomial(A,B,c) for A,B,c in eqns[-2:]]
         self.glunomials.append(self.M_holo)
+        start = time.time()
         self.track_satellite()
+        print 'tracked in %s seconds.'%(time.time() - start)
         try:
             self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
         except:
