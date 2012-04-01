@@ -30,7 +30,9 @@ def track_test(V, point=0, debug=True):
         if debug: print '1/conditions: %f %f'%(1/cond[0], 1/cond[1])
         t = H.R_circle[n]
         try:
-            steps.append(G.track(z, t, debug))
+            Zn = G.track(z,t, debug)
+            if debug: print norm(Zn - H.R_fibers[n].shapes[point]())
+            steps.append(Zn)
         except ValueError,e:
             print e
             break
