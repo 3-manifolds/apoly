@@ -59,7 +59,7 @@ def tighten_test(V, point=0, debug=True):
     return steps
 
 def big_track(V):
-    N = len(V.holonomizer.T_fibers[0].shapes)
+    N = len(V.holonomizer.R_fibers[0].shapes)
     start = time.time()
     for n in range(N):
         print n

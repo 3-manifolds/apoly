@@ -177,26 +177,34 @@ class GluingSystem:
             prev_Z, prev_residual = Zn, residual
             count += 1
 
-    def track(self, Z, M_target, debug=False):
+    def track(self, Z, M_target, dT=1.0, debug=False):
         """
         Track solutions of the gluing system starting at Z and
         ending at a solution where the meridian holonomy takes the
-        specified value.
+        specified value.  The path is subdivided into subpaths of
+        length determined by dT, which may be further divided if
+        convergence problems arise.
         """
+        M_start = self(Z)[-1]
+        delta = (M_target - M_start)
+        T = 0.0
+        Zn = Z
         # First we try the cheap and easy method
-        Zn, residual = self.newton1(Z, M_target)
+        while T < 1.0:
+            T = T+dT
+            target = M_start + T*delta
+            Zn, residual = self.newton1(Zn, target)
         if residual < 1.0E-14: # What is a good threshold here?
             return Zn
         # If that fails, try taking baby steps.
         if debug: print 'Taking baby steps ...'
-        M_start = self(Z)[-1]
-        T, dT = 0.0, 0.5
-        delta = (M_target - M_start)
-        prev_Z = Z
         success = 0
+        T, dT = 0.0, 0.5*dT
+        prev_Z = Z
         while T < 1.0:
-            if debug: print 'T = %f'%T
-            baby_target = M_start + min(T+dT, 1.0)*delta
+            Tn = min(T+dT, 1.0)
+            if debug: print 'trying T = %f'%Tn
+            baby_target = M_start + Tn*delta
             Zn, residual = self.newton2(prev_Z, baby_target, debug=debug)
             if residual < 1.0E-12:
                 prev_Z = Zn
@@ -206,7 +214,7 @@ class GluingSystem:
                     if debug: print 'Track step increased to %f'%dT
                 else:
                     success += 1
-                T += dT
+                T = Tn
             else:
                 success = 0
                 dT /= 2
@@ -275,13 +283,18 @@ class ShapeVector:
 class Fiber:
     """
     A fiber for the rational function [holonomy of the meridian].
-    Manages a single PHCSytem with a complete solution set.
+    Manages a single PHCSytem with a complete solution set.  Can
+    be initialized with a list of PHCsolutions.
     """
-    def __init__(self, H_meridian, system, tolerance=1.0E-06):
+    def __init__(self, H_meridian, PHCsystem=None,
+                 solutions=None, tolerance=1.0E-06):
         self.H_meridian = H_meridian
-        self.system = system
         self.tolerance = tolerance
-        self.extract_info()
+        if solutions:
+            self.shapes = [ShapeVector(s) for s in solutions]
+        self.system = PHCsystem
+        if self.system:
+            self.extract_info()
         
     def extract_info(self):
         N = self.system.num_variables()/2
@@ -290,7 +303,7 @@ class Fiber:
         self.shapes = [ShapeVector(S.point[:N]) for S in self.solutions]
 
     def __len__(self):
-        return len(self.solutions)
+        return len(self.shapes)
 
     def __get_item(self, index):
         return self.shapes[index]
@@ -324,19 +337,26 @@ class Fiber:
         return True
             
     def details(self):
+        # broken if not instantiaed with a PHCsystem
         for n, s in enumerate(self.solutions):
             print 'solution #%s:'%n
             print s
 
     def residuals(self):
+        # broken if not instantiaed with a PHCsystem
         for n, s in enumerate(self.solutions):
             print n, s.res 
 
     def polish(self):
-        self.system.polish()
-        self.extract_info()
+        # broken if not instantiaed with a PHCsystem
+        if self.system:
+            self.system.polish()
+            self.extract_info()
 
     def Tillmann_points(self):
+        # broken if not instantiaed with a PHCsystem
+        if self.system is None:
+            return []
         result = []
         for n, s in enumerate(self.solutions):
             if (s.t != 1.0 or self.shapes[n].is_degenerate()):
@@ -345,11 +365,12 @@ class Fiber:
     
 class PHCFibrator:
     """
-    A factory for Fibers, computed by PHC.
+    A factory for Fibers, computed by PHC or by a GluingSystem
     """
     def __init__(self, mfld, radius=1.02):
         self.manifold = mfld
         self.mfld_name = mfld.name()
+        self.gluing_system = GluingSystem(mfld)
         self.radius = radius
         self.num_tetrahedra = N = self.manifold.num_tetrahedra()
         variables = ( ['X%s'%n for n in range(N)] +
@@ -428,6 +449,25 @@ class PHCFibrator:
                                                target_holonomy,
                                                allow_collisions)
         return Fiber(target_holonomy, target_system)
+
+    def transport2(self, start_fiber, target_holonomy, allow_collisions=False):
+        """
+        Use a GluingSystem to transport fibers.
+        """
+        solutions = []
+        dT = 1.0
+        while True:
+            if dT < 1.0/64:
+                raise ValueError, 'collision unavoidable'
+            for shapevector in start_fiber.shapes:
+                Zn = self.gluing_system.track(shapevector(), target_holonomy, dT=dT)
+                solutions.append(Zn)
+            result = Fiber(target_holonomy, solutions=solutions)
+            if result.collision():
+                dT *= 0.5
+            else:
+                break
+        return result
     
 class Holonomizer:
     """
@@ -474,25 +514,25 @@ class Holonomizer:
         self.R_circle = circle = [R*exp(-n*Darg*1j) for n in range(self.order)]
         self.base_index = base_index = (self.order - int((arg)/Darg))%self.order
         print ' %-5s\r'%base_index,
-        self.R_fibers[base_index] = self.fibrator.transport(
+        self.R_fibers[base_index] = self.fibrator.transport2(
                 self.base_fiber, circle[base_index])
         for n in xrange(base_index+1, self.order):
             print ' %-5s\r'%n,
             sys.stdout.flush()
-            self.R_fibers[n] = F = self.fibrator.transport(
+            self.R_fibers[n] = F = self.fibrator.transport2(
                 self.R_fibers[n-1], circle[n])
-            self.R_fibers[n].system.polish()
+            # self.R_fibers[n].polish()
             if not F.is_finite():
                 print '**',
         for n in xrange(base_index-1, -1, -1):
             print ' %-5s\r'%n,
             sys.stdout.flush()
-            self.R_fibers[n] = F = self.fibrator.transport(
+            self.R_fibers[n] = F = self.fibrator.transport2(
                 self.R_fibers[n+1], circle[n])
             if not F.is_finite():
                 print '**',
         print
-        self.last_R_fiber = self.fibrator.transport(self.R_fibers[-1],
+        self.last_R_fiber = self.fibrator.transport2(self.R_fibers[-1],
                                                     self.R_fibers[0].H_meridian)
         print 'Polishing the end fibers ...'
         self.R_fibers[0].polish()
@@ -1308,7 +1348,7 @@ class Apoly:
             hintfile.write('hint={\n')
             hintfile.write('"radius" : %f,\n'%self.radius)
             hintfile.write('"fft_size" : %d,\n'%self.fft_size)
-            if not self.lift.multi:
+            if not self.multi:
                 hintfile.write('"multi" : %s,\n'%self.multi)
             if self.denom:
                 hintfile.write('"denom" : "%s",\n'%self.denom)
