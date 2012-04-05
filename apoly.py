@@ -14,7 +14,7 @@ except ImportError:
         return sum( where( s>tol, 1, 0 ) )
 from phc import *
 from snappy import *
-from random import random
+from random import random, randint
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
 
@@ -497,10 +497,10 @@ class Holonomizer:
         start = time.time()
         self.track_satellite()
         print 'tracked in %s seconds.'%(time.time() - start)
-        try:
-            self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
-        except:
-            print 'Failed'
+#        try:
+        self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
+#        except:
+#            print 'Failed'
             
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
@@ -567,16 +567,19 @@ class Holonomizer:
             [self.L_holo(f.shapes[n]()) for f in fiber_list]
             for n in xrange(self.degree)]
         # Should choose a random fiber, not the first one.
-        longitude_traces = self.find_longitude_traces(fiber_list[0])
+        F = randint(0,self.order - 1)
+        longitude_traces = self.find_longitude_traces(fiber_list[F])
         longitude_eigenvalues = []
         for n, L in enumerate(longitude_holonomies):
             tr = longitude_traces[n]
-            E = []
-            e = sqrt(L[0])
-            E.append(e if abs(e + 1/e - tr) < abs(e + 1/e + tr) else -e ) 
-            for m, H in enumerate(L[1:],1):
-                e = sqrt(H)
-                E.append(e if abs(e - E[m-1]) < abs(e + E[m-1]) else -e )
+            e = sqrt(L[F])
+            E = [ e if abs(e + 1/e - tr) < abs(e + 1/e + tr) else -e ]
+            for holo in L[F+1:]:
+                e = sqrt(holo)
+                E.append(e if abs(e - E[-1]) < abs(e + E[-1]) else -e )
+            for holo in L[F-1::-1]:
+                e = sqrt(holo)
+                E.insert(0,e if abs(e - E[0]) < abs(e + E[0]) else -e )
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
 
@@ -957,9 +960,9 @@ class PolyRelation:
        print 'shifts: ', shifts
        return max(shifts)
 
-    def find_shift(self, raw_coeffs, tolerance= 0.001):
+    def find_shift(self, raw_coeffs, cutoff=0.1):
        N = self.fft_size
-       R = array([self.radius])
+       R = self.radius
        if N%2 == 0:
            renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
@@ -968,7 +971,7 @@ class PolyRelation:
        if max(abs(coeffs[N/2])) > 0.5:
               return None
        for n in range(1+N/2,N):
-           if max(abs(coeffs[n])) > 0.001:
+           if max(abs(coeffs[n])) > cutoff:
                return N - n
        return 0
     
@@ -1193,7 +1196,7 @@ class Apoly:
                     multiplicities.append((i, multis[i]))
             return multiplicities, [ev_list[i] for i in sdr]
 
-    def find_shift(self, raw_coeffs):
+    def find_shift(self, raw_coeffs, cutoff=0.1):
        N = self.fft_size
        if N%2 == 0:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
@@ -1203,7 +1206,7 @@ class Apoly:
        if max(abs(coeffs[N/2])) > 0.5:
               return None
        for n in range(1+N/2,N):
-           if max(abs(coeffs[n])) > 0.001:
+           if max(abs(coeffs[n])) > cutoff:
                return N - n
        return 0
 
