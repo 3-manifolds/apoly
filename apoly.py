@@ -189,6 +189,7 @@ class GluingSystem:
         delta = (M_target - M_start)
         T = 0.0
         Zn = Z
+        if debug: print 'Z = %s; condition=%s'%(Z, [self.condition(x) for x in Z]) 
         # First we try the cheap and easy method
         while T < 1.0:
             T = T+dT
@@ -203,7 +204,7 @@ class GluingSystem:
         prev_Z = Z
         while T < 1.0:
             Tn = min(T+dT, 1.0)
-            if debug: print 'trying T = %f'%Tn
+            if debug: print 'trying T = %.17f'%Tn
             baby_target = M_start + Tn*delta
             Zn, residual = self.newton2(prev_Z, baby_target, debug=debug)
             if residual < 1.0E-12:
@@ -211,18 +212,18 @@ class GluingSystem:
                 if success > 3:
                     success = 0
                     dT *= 2
-                    if debug: print 'Track step increased to %f'%dT
+                    if debug: print 'Track step increased to %.17f'%dT
                 else:
                     success += 1
                 T = Tn
             else:
                 success = 0
                 dT /= 2
-                if debug: print 'Track step reduced to %f; condition = %s'%(
+                if debug: print 'Track step reduced to %.17f; condition = %s'%(
                         dT,
                         self.condition(prev_Z))
-                if dT < 1.0/(2.0**16):
-                    raise ValueError, 'Track failed: step size limit reached.'
+                if dT < 2.0**(-32):
+                    raise ValueError('Track failed: step size limit reached.')
         return Zn
     
 class Glunomial:
@@ -260,18 +261,21 @@ class ShapeVector:
     """
     def __init__(self, values):
         self.array = array(values)
-        self.__repr__ = self.__str__ = self.array.__str__
+        self.__str__ = self.array.__str__
         self.__getitem__ = self.array.__getitem__
         self.__len__ = self.array.__len__
         
     def __eq__(self, other):
-        return norm(self.array - other.array) < 1.0E-10
+        return norm(self.array - other.array) < 1.0E-6
 
-    def __xor__(self, other):
+    def dist(self, other):
         return norm(self.array - other.array)
 
     def __call__(self):
         return self.array
+
+    def __repr__(self):
+        return repr(list(self))
     
     def is_degenerate(self):
         moduli = abs(self.array)
@@ -282,12 +286,15 @@ class ShapeVector:
     
 class Fiber:
     """
-    A fiber for the rational function [holonomy of the meridian].
+    A fiber for the rational function [holonomy of the meridian]
+    restricted to the curve defined by a PHCsystem.
     Manages a single PHCSytem with a complete solution set.  Can
     be initialized with a list of PHCsolutions.
     """
     def __init__(self, H_meridian, PHCsystem=None,
-                 solutions=None, tolerance=1.0E-06):
+                 solutions=None, tolerance=1.0E-05):
+        # Here the tolerance is used to determine which of the PHC solutions
+        # are at infinity.
         self.H_meridian = H_meridian
         self.tolerance = tolerance
         if solutions:
@@ -298,10 +305,16 @@ class Fiber:
         
     def extract_info(self):
         N = self.system.num_variables()/2
-        self.solutions = self.system.solution_list()
+        self.solutions = self.system.solution_list(tolerance=self.tolerance)
         # We only keep the "X" variables.
         self.shapes = [ShapeVector(S.point[:N]) for S in self.solutions]
 
+    def __repr__(self):
+        return 'Fiber(%s,\nsolutions=%s\n)'%(
+            repr(self.H_meridian),
+            repr([list(x) for x in self.shapes]).replace('],','],\n')
+            )
+    
     def __len__(self):
         return len(self.shapes)
 
@@ -323,7 +336,7 @@ class Fiber:
     def collision(self):
         for n, p in enumerate(self.shapes):
             for q in self.shapes[n+1:]:
-                if p^q < 1.0E-10:
+                if p.dist(q) < 1.0E-10:
                     return True
         return False
 
@@ -348,7 +361,7 @@ class Fiber:
             print n, s.res 
 
     def polish(self):
-        # broken if not instantiaed with a PHCsystem
+        # broken if not instantiated with a PHCsystem
         if self.system:
             self.system.polish()
             self.extract_info()
@@ -367,16 +380,18 @@ class PHCFibrator:
     """
     A factory for Fibers, computed by PHC or by a GluingSystem
     """
-    def __init__(self, mfld, radius=1.02):
+    def __init__(self, mfld, radius=1.02, saved_base_fiber=None, tolerance=1.0E-5):
+        # Here the tolerance is used to determine when PHC solutions are
+        # at infinity.
         self.manifold = mfld
         self.mfld_name = mfld.name()
         self.gluing_system = GluingSystem(mfld)
         self.radius = radius
+        self.tolerance=tolerance
         self.num_tetrahedra = N = self.manifold.num_tetrahedra()
         variables = ( ['X%s'%n for n in range(N)] +
                       ['Y%s'%n for n in range(N)] )
         self.ring = PolyRing(variables + ['t'])
-        self.basepoint = radius*exp(2*pi*1j*random())
         self.equations = self.build_equations()
         self.equations += ['X%s + Y%s - 1'%(n,n) for n in range(N)] 
         self.psystem = ParametrizedSystem(
@@ -384,12 +399,26 @@ class PHCFibrator:
             't',
             [PHCPoly(self.ring, e) for e in self.equations]
             )
-        print 'Computing the starting fiber ... ',
-        begin = time.time()
-        self.base_system = self.psystem.start(self.basepoint, tolerance=1.0E-06)
-        print 'done. (%s seconds)'%(time.time() - begin)
-        self.base_fiber = Fiber(self.basepoint,
-                                 self.base_system)
+        if saved_base_fiber and os.path.exists(saved_base_fiber):
+            print 'Loading the starting fiber from %s'%saved_base_fiber
+            datafile = open(saved_base_fiber)
+            data = datafile.read()
+            datafile.close()
+            self.base_fiber = eval(data)
+            self.basepoint = self.base_fiber.H_meridian
+        else:
+            self.basepoint = radius*exp(2*pi*1j*random())
+            print 'Computing the starting fiber ... ',
+            begin = time.time()
+            self.base_system = self.psystem.start(self.basepoint, self.tolerance)
+            print 'done. (%s seconds)'%(time.time() - begin)
+            self.base_fiber = Fiber(self.basepoint,
+                                    self.base_system)
+            if saved_base_fiber:
+                datafile = open(saved_base_fiber, 'w')
+                datafile.write(repr(self.base_fiber))
+                datafile.close()
+                print 'Saved as %s'%saved_base_fiber
 
     def __len__(self):
         return len(self.base_fiber.solutions)
@@ -423,7 +452,7 @@ class PHCFibrator:
     def build_equations(self):
         if (self.manifold.num_cusps() != 1 or
             not self.manifold.is_orientable()):
-            raise ValueError, 'Manifold must be orientable with one cusp.'
+            raise ValueError('Manifold must be orientable with one cusp.')
         eqns = self.manifold.gluing_equations('rect')
         meridian = eqns[-2]
         result = []
@@ -450,7 +479,8 @@ class PHCFibrator:
                                                allow_collisions)
         return Fiber(target_holonomy, target_system)
 
-    def transport2(self, start_fiber, target_holonomy, allow_collisions=False):
+    def transport2(self, start_fiber, target_holonomy, allow_collisions=False,
+                   debug=False):
         """
         Use a GluingSystem to transport fibers.
         """
@@ -458,9 +488,10 @@ class PHCFibrator:
         dT = 1.0
         while True:
             if dT < 1.0/64:
-                raise ValueError, 'collision unavoidable'
+                raise ValueError('Collision unavoidable. Try a different radius.')
             for shapevector in start_fiber.shapes:
-                Zn = self.gluing_system.track(shapevector(), target_holonomy, dT=dT)
+                Zn = self.gluing_system.track(shapevector(), target_holonomy, dT=dT,
+                                              debug=debug)
                 solutions.append(Zn)
             result = Fiber(target_holonomy, solutions=solutions)
             if result.collision():
@@ -474,10 +505,10 @@ class Holonomizer:
     A family of fibers for the meridian holonomy map, lying
     above the Nth roots of unity on the unit circle.  (N=128 by default.)
     """
-    def __init__(self, manifold, order=128, radius=1.02):
+    def __init__(self, manifold, order=128, radius=1.02, saved_base_fiber=None):
         self.order = order
         self.radius = radius
-        self.fibrator = PHCFibrator(manifold, radius=radius)
+        self.fibrator = PHCFibrator(manifold, radius, saved_base_fiber)
         self.manifold = manifold
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
@@ -497,10 +528,10 @@ class Holonomizer:
         start = time.time()
         self.track_satellite()
         print 'tracked in %s seconds.'%(time.time() - start)
-#        try:
-        self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
-#        except:
-#            print 'Failed'
+        try:
+            self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
+        except:
+            print 'Failed.'
             
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
@@ -514,6 +545,7 @@ class Holonomizer:
         self.R_circle = circle = [R*exp(-n*Darg*1j) for n in range(self.order)]
         self.base_index = base_index = (self.order - int((arg)/Darg))%self.order
         print ' %-5s\r'%base_index,
+        # Move to the R-circle, if necessary.
         self.R_fibers[base_index] = self.fibrator.transport2(
                 self.base_fiber, circle[base_index])
         for n in xrange(base_index+1, self.order):
@@ -552,17 +584,25 @@ class Holonomizer:
         for n in xrange(self.order):
             print ' %-5s\r'%n,
             sys.stdout.flush()
-            self.T_fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
-            self.T_fibers[n].system.polish()
+            try:
+                self.T_fibers[n] = self.fibrator.transport2(self.R_fibers[n], circle[n])
+            except ValueError:
+                print 'Tighten failed at %s'%n
+            #self.T_fibers[n] = self.fibrator.transport(self.R_fibers[n], circle[n])
+            #self.T_fibers[n].system.polish()
         print '\nChecking for Tillmann points.'
         for n in xrange(self.order):
-            t = self.T_fibers[n].Tillmann_points()
-            if t:
-                print 'Tillmann points %s found in fiber %s.'%(t, n)
+            try:
+                t = self.T_fibers[n].Tillmann_points()
+                if t:
+                    print 'Tillmann points %s found in fiber %s.'%(t, n)
+            except AttributeError: # If the fiber was not computed.
+                print 'skipping %s'%n
         self.T_longitude_holos, self.T_longitude_evs = self.longidata(self.T_fibers)
 
     def longidata(self, fiber_list):
         print 'Computing longitude holonomies and eigenvalues.'
+        # This crashes if there are bad fibers.
         longitude_holonomies = [
             [self.L_holo(f.shapes[n]()) for f in fiber_list]
             for n in xrange(self.degree)]
@@ -856,13 +896,13 @@ class PolyRelation:
             self.multiplicities, Larrays = self.demultiply(Larrays)
         self.sampled_coeffs = self.symmetric_funcs(Larrays)
         if denom:
-            M = array(Mvalues)
-            exec('D = %s'%self.denom) #denom is an expression for a poly in M
+            H = array(Mvalues)
+            exec('D = %s'%self.denom) #denom is an expression for a poly in H_M
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
         #print self.raw_coeffs.shape
-        self.shift = self.find_shift(self.raw_coeffs)
+        self.shift = self.find_shift()
         if self.shift is None:
             print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
@@ -880,11 +920,15 @@ class PolyRelation:
         C = self.int_coeffs.transpose()
         coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
         rows, cols = coefficient_array.shape
-        while rows:
+        # If the FFT size is large enough and we have a good denominator,
+        # we should not go past the middle
+        realrows = rows/2 - 1
+        while realrows:
             if max(abs(coefficient_array[rows-1])) > 0:
                 break
-            rows -= 1
-        self.coefficients = coefficient_array[:rows]
+            if realrows:
+                realrows -= 1
+        self.coefficients = coefficient_array[:realrows]
         self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
                       i in range(len(self.float_coeffs))]
         print "Noise levels: "
@@ -960,14 +1004,14 @@ class PolyRelation:
        print 'shifts: ', shifts
        return max(shifts)
 
-    def find_shift(self, raw_coeffs, cutoff=0.1):
+    def find_shift(self, cutoff=0.1):
        N = self.fft_size
        R = self.radius
        if N%2 == 0:
            renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
            renorm = R**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = (raw_coeffs*renorm).transpose()
+       coeffs = (self.raw_coeffs*renorm).transpose()
        if max(abs(coeffs[N/2])) > 0.5:
               return None
        for n in range(1+N/2,N):
@@ -1068,7 +1112,8 @@ class Apoly:
   """
     def __init__(self, mfld, fft_size=128, gluing_form=False,
                  radius=1.02, denom=None, multi=False,
-                 apoly_dir='apolys', gpoly_dir='gpolys', hint_dir='hints'):
+                 apoly_dir='apolys', gpoly_dir='gpolys',
+                 base_dir='base_fibers', hint_dir='hints'):
         if isinstance(mfld, Manifold):
             self.manifold = mfld
             self.mfld_name = mfld.name()
@@ -1082,6 +1127,7 @@ class Apoly:
                    'radius'      : radius,
                    'apoly_dir'   : apoly_dir,
                    'gpoly_dir'   : gpoly_dir,
+                   'base_dir'    : base_dir,
                    'hint_dir'    : hint_dir}
 #        if (fft_size, radius, denom, multi) == (128, None, None, False):
 #            print "Checking for hints ...",
@@ -1098,9 +1144,14 @@ class Apoly:
         self.radius = options['radius']
         self.apoly_dir = options['apoly_dir']
         self.gpoly_dir = options['gpoly_dir']
+        self.base_dir = options['base_dir']
         self.hint_dir = options['hint_dir']
-        self.holonomizer = Holonomizer(self.manifold, order=self.fft_size,
-                                       radius=self.radius)
+        saved_base_fiber = os.path.join(self.base_dir, self.manifold.name()+'.base')
+        self.holonomizer = Holonomizer(
+            self.manifold,
+            order=self.fft_size,
+            radius=self.radius,
+            saved_base_fiber=saved_base_fiber)
         if self.gluing_form:
             vals = [array(x) for x in self.holonomizer.R_longitude_holos]
         else:
@@ -1109,19 +1160,20 @@ class Apoly:
             self.multiplicities, vals = self.demultiply(vals)
         self.sampled_coeffs = self.symmetric_funcs(vals)
         if self.denom:
-            M = array(self.holonomizer.R_circle)
+            # denom is a polynomial in H = M^2 = holonomy of meridian.
+            H = array(self.holonomizer.R_circle)
             exec('D = %s'%self.denom)
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
-        self.shift = self.find_shift(self.raw_coeffs)
+        self.shift, self.float_coeffs = self.find_shift(self.raw_coeffs)
         print 'Shift is %s'%self.shift
         if self.shift is None:
             print 'Coefficients seem to be wrapping.  A larger fft size might help.'
             return
-        renorm = self.radius**(-array(range(self.fft_size - self.shift)
-                                      + range(-self.shift, 0)))
-        self.float_coeffs = renorm*self.raw_coeffs
+#        renorm = self.radius**(-array(range(self.fft_size - self.shift)
+#                                      + range(-self.shift, 0)))
+#        self.float_coeffs = renorm*self.raw_coeffs
 #        print self.raw_coeffs
 #        print self.float_coeffs
         self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
@@ -1182,7 +1234,7 @@ class Apoly:
 
     def demultiply(self, ev_list):
             multiplicities = []
-            sdr = []
+            sdr = [] #system of distinct representatives
             multis = [1]*len(ev_list)
             for i in range(len(ev_list)):
                 unique = True
@@ -1202,13 +1254,14 @@ class Apoly:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = (raw_coeffs*renorm).transpose()
+       float_coeffs = raw_coeffs*renorm
+       coeffs = (float_coeffs).transpose()
        if max(abs(coeffs[N/2])) > 0.5:
-              return None
-       for n in range(1+N/2,N):
-           if max(abs(coeffs[n])) > cutoff:
-               return N - n
-       return 0
+              return None, float_coeffs
+       for n in range(N-1, N/2, -1):
+           if max(abs(coeffs[n])) < cutoff:
+               return N-1-n, float_coeffs 
+       return 0, float_coeffs
 
 # Should have a monomial class, and generate a list of monomials here not a string
     def monomials(self):
@@ -1423,7 +1476,7 @@ class Slope:
             x, y = x*power_scale[0], y*power_scale[1]
             if x == 0:
                   if y == 0:
-                        raise ValueError, "gcd(0,0) is undefined."
+                        raise ValueError('gcd(0,0) is undefined.')
                   else:
                         gcd = abs(y)
             else:
@@ -1565,7 +1618,7 @@ class Plot:
         else:
             print self.type
             print self.data[0]
-            raise ValueError, "Data must consist of vectors of real or complex numbers."
+            raise ValueError('Data must consist of vectors of real or complex numbers.')
         self.gnuplot.stdin.write(gnuplot_input)
         
     def show_plots(self):
