@@ -13,6 +13,8 @@ except ImportError:
         s = svd(A,compute_uv=0)
         return sum( where( s>tol, 1, 0 ) )
 from phc import *
+import snappy
+snappy.SnapPy.matrix = matrix
 from snappy import *
 from random import random, randint
 from subprocess import Popen, PIPE
@@ -604,7 +606,8 @@ class Holonomizer:
         print 'Computing longitude holonomies and eigenvalues.'
         # This crashes if there are bad fibers.
         longitude_holonomies = [
-            [self.L_holo(f.shapes[n]()) for f in fiber_list]
+            [self.L_holo(f.shapes[n]()) for f in fiber_list
+             if not isinstance(f, int)]
             for n in xrange(self.degree)]
         # Should choose a random fiber, not the first one.
         F = randint(0,self.order - 1)
@@ -681,11 +684,12 @@ class Holonomizer:
         return G.O31(word)
 
     def in_SU2(self, shape):
+        tolerance = 1.0E-10
         gens = self.manifold.fundamental_group().generators()
         # Check that all generators have real trace in [-2,2]
         for S in [self.SL2C(g, shape) for g in gens]:
             tr = complex(S[0,0] + S[1,1])
-            if abs(tr.imag) > 1.0E-10:
+            if abs(tr.imag) > tolerance:
                 #print 'trace not real'
                 return False
             if abs(tr.real) > 2.0:
@@ -699,14 +703,14 @@ class Holonomizer:
         M = matrix(zeros((4,4)))
         u, s, v = svd(A - eye(4))
         vt = transpose(v)
-        M[:,[0,1]] = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        M[:,[0,1]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
         u, s, v = svd(B - eye(4))
         vt = transpose(v)
-        M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
         # Check if the axes cross, and find the fixed point (i.e. Minkwoski line)
         u, s, v = svd(M)
         vt = transpose(v)
-        rel = vt[:,[n for n in range(4) if abs(s[n]) < 1.0E-10]]
+        rel = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
         if rel.shape != (4,1):
             #print 'linear algebra failure'
             return False
@@ -718,9 +722,9 @@ class Holonomizer:
         if abs(fix[0]) <= norm(fix[1:]):
             #print 'fixed line is not in the light cone'
             return False
-        # check if all other generators fix the same point
-        for O in o31matrices[2:]:
-            if norm(O*fix - fix) > 1.0e-10:
+        # check if all generators fix the same point
+        for O in o31matrices:
+            if norm(O*fix - fix) > tolerance:
                 #print 'some generators do not share the fixed point.'
                 return False
         return True
@@ -784,23 +788,30 @@ def solve_mod2_system(the_matrix,rhs):
 
 class PECharVariety:
     def __init__(self, mfld, order=128, radius=1.02,
-                 holonomizer=None, check_su2=False):
+                 holonomizer=None, su2_only=False,
+                 base_dir='base_fibers', hint_dir='hints'):
         if isinstance(mfld, Manifold):
             self.manifold = mfld
             self.manifold_name = mfld.name()
         else:
             self.manifold = Manifold(mfld)
             self.manifold_name = mfld
+        saved_base_fiber = os.path.join(base_dir,
+                                        self.manifold.name()+'.base')
         if holonomizer is None:
-            self.holonomizer = Holonomizer(self.manifold, order=order, radius=radius)
+            self.holonomizer = Holonomizer(
+                self.manifold,
+                order=order,
+                radius=radius,
+                saved_base_fiber=saved_base_fiber)
             self.holonomizer.tighten()
         else:
             self.holonomizer = holonomizer
         self.order = self.holonomizer.order
         self.manifold = self.holonomizer.manifold
-        self.build_arcs( check_su2)
+        self.build_arcs( su2_only)
 
-    def build_arcs(self, check_su2=False):
+    def build_arcs(self, su2_only=False):
         self.arcs = []
         self.arc_info = []
         H = self.holonomizer
@@ -812,7 +823,7 @@ class PECharVariety:
             lastL = 0
             for n, ev in enumerate(track):
                 su2_ok = True
-                if check_su2:
+                if su2_only:
                     try:
                         su2_ok = H.in_SU2(H.T_fibers[n].shapes[m])
                     except:
@@ -868,8 +879,8 @@ class PECharVariety:
         term = 'aqua' if sys.platform == 'darwin' else 'X11'
         Plot(self.arcs, commands="""
                     set terminal %s title "%s" size 1000 500
-                    set xrange [0:1]
-                    set yrange[0:0.5]
+                    set xrange [0.0:1.0]
+                    set yrange[0.0:0.5]
                     set xtics 0.5
                     set grid xtics nomxtics
                     set mxtics
