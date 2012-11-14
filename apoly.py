@@ -30,6 +30,7 @@ try:
     M,L = polygens(QQ, 'M,L')
     t = polygen(QQ, 't')
     z = polygen(CC, 'z')
+    from alexander import alexander_polynomial
     got_sage = True
 except:
     pass
@@ -684,7 +685,7 @@ class Holonomizer:
         return G.O31(word)
 
     def in_SU2(self, shape):
-        tolerance = 1.0E-10
+        tolerance = 1.0E-5
         gens = self.manifold.fundamental_group().generators()
         # Check that all generators have real trace in [-2,2]
         for S in [self.SL2C(g, shape) for g in gens]:
@@ -876,9 +877,9 @@ class PECharVariety:
                 pass
                         
     def show(self):
-        term = 'aqua' if sys.platform == 'darwin' else 'X11'
+        term = 'aqua' if sys.platform == 'darwin' else 'wxt'
         Plot(self.arcs, commands="""
-                    set terminal %s title "%s" size 1000 500
+                    set terminal %s title "%s" size 1400,700
                     set xrange [0.0:1.0]
                     set yrange[0.0:0.5]
                     set xtics 0.5
@@ -1600,7 +1601,7 @@ class Plot:
             self.type = 'complex'
         elif 'float' in str(self.type):
             self.type = 'float'
-        self.gnuplot = Popen(['gnuplot', '-geometry 800x720+200+0'],
+        self.gnuplot = Popen(['gnuplot', '-geometry 1200x1000+200+0'],
                              shell=True,
                              stdin=PIPE)
         if len(self.data) > 1:
