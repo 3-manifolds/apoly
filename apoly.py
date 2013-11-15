@@ -905,7 +905,8 @@ class Apoly:
     <fft_size>       must be at least twice the M-degree.  Try doubling this
                      if the coefficients seem to be wrapping.
     <denom>          Denominator for leading coefficient.  This should be
-                     a string, representing a polynomial expression in M.
+                     a string, representing a polynomial expression in H,
+                     the meridian holonomy.  e.g. denom='(H-1)*(H-1)'
     <multi>          If true, multiple copies of lifts are not removed, so
                      multiplicities of factors of the polynomial are computed. 
 
@@ -915,10 +916,10 @@ class Apoly:
                       algebra program.
     A.show_R_longitude_evs() uses gnuplot to graph the L-projections
                       of components of the inverse image of the satellite
-                      circle in the M-plane.
+                      circle of radius R in the M-plane.
     A.show_T_longitude_evs() uses gnuplot to graph the L-projections
                       of components of the inverse image of the tightened
-                      circle in the M-plane.
+                      circle of radius T in the M-plane.
     A.show_newton(text=False) shows the newton polygon with dots.  The text
                       flag shows the coefficients.
     A.boundary_slopes() prints the boundary slopes detected by the character
@@ -934,7 +935,7 @@ class Apoly:
 
     An Apoly object prints itself as a matrix of coefficients.
   """
-    def __init__(self, mfld, fft_size=128, gluing_form=False,
+    def __init__(self, mfld, fft_size=128, gluing_form=False, tighten=False,
                  radius=1.02, denom=None, multi=False,
                  apoly_dir='apolys', gpoly_dir='gpolys',
                  base_dir='base_fibers', hint_dir='hints'):
@@ -945,6 +946,7 @@ class Apoly:
             self.mfld_name = mfld
             self.manifold = Manifold(mfld)
         self.gluing_form = gluing_form
+        self.tighten = tighten
         options = {'fft_size'    : fft_size,
                    'denom'       : denom,
                    'multi'       : multi,
@@ -970,16 +972,24 @@ class Apoly:
         self.gpoly_dir = options['gpoly_dir']
         self.base_dir = options['base_dir']
         self.hint_dir = options['hint_dir']
-        saved_base_fiber = os.path.join(self.base_dir, self.manifold.name()+'.base')
+        filename = self.manifold.name()+'.base'
+        saved_base_fiber = os.path.join(self.base_dir, filename) 
         self.holonomizer = Holonomizer(
             self.manifold,
             order=self.fft_size,
             radius=self.radius,
             saved_base_fiber=saved_base_fiber)
-        if self.gluing_form:
-            vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+        if self.tighten:
+            self.holonomizer.tighten(1.01)
+            if self.gluing_form:
+                vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+            else:
+                vals = [array(x) for x in self.holonomizer.R_longitude_evs]
         else:
-            vals = [array(x) for x in self.holonomizer.R_longitude_evs]
+            if self.gluing_form:
+                vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+            else:
+                vals = [array(x) for x in self.holonomizer.R_longitude_evs]
         if multi == False:
             self.multiplicities, vals = self.demultiply(vals)
         self.sampled_coeffs = self.symmetric_funcs(vals)
