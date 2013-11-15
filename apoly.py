@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import numpy
 from numpy import array, matrix, ndarray
 from numpy import dot, prod, diag, transpose, zeros, ones, eye
@@ -506,7 +508,9 @@ class PHCFibrator:
 class Holonomizer:
     """
     A family of fibers for the meridian holonomy map, lying
-    above the Nth roots of unity on the unit circle.  (N=128 by default.)
+    above the points Rξ^m where ξ =e^(2πi/N). (N=128 by default.)
+    The holonomizer can be tightened, to also contain fibers over
+    points on the circle of radius T (= 1.0 by default).
     """
     def __init__(self, manifold, order=128, radius=1.02, saved_base_fiber=None):
         self.order = order
@@ -518,7 +522,9 @@ class Holonomizer:
             raise RuntimeError, 'The starting fiber contains Tillmann points.'
         self.degree = len(self.base_fiber)
         print 'Degree is %s.'%self.degree
-        # pre-initialize
+        # pre-initialize just inserting an integer for each fiber
+        # if the fiber construction fails, this can be detected by
+        # isinstance(fiber, int)
         self.R_fibers = range(order)
         self.T_fibers = range(order)
         self.dim = manifold.num_tetrahedra()
@@ -531,15 +537,16 @@ class Holonomizer:
         start = time.time()
         self.track_satellite()
         print 'tracked in %s seconds.'%(time.time() - start)
-#        try:
-        self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
-#        except:
-#            print 'Failed.'
+        self.R_longitude_holos, self.R_longitude_evs = self.longidata(
+            self.R_fibers)
             
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
 
-    def track_satellite(self): 
+    def track_satellite(self):
+        """
+        Construct the fibers over the circle of radius R.
+        """
         print 'Tracking the satellite at radius %s ...'%self.radius
         arg = log(self.base_fiber.H_meridian).imag%(2*pi)
         R = self.radius
@@ -902,6 +909,8 @@ class Apoly:
     <mfld>           is a manifold name recognized by SnapPy, or a Manifold instance.
     <gluing_form>    (True/False) indicates whether to find a "standard"
                      A-polynomial, or the gluing variety variant.
+    <tighten>        (True/False) if set, try to get the holonomizer to 
+                     tighten to radius 1, and use those fibers.
     <fft_size>       must be at least twice the M-degree.  Try doubling this
                      if the coefficients seem to be wrapping.
     <denom>          Denominator for leading coefficient.  This should be
@@ -920,6 +929,8 @@ class Apoly:
     A.show_T_longitude_evs() uses gnuplot to graph the L-projections
                       of components of the inverse image of the tightened
                       circle of radius T in the M-plane.
+    A.show_transforms() uses gnuplot to graph the coefficient polynomials
+                      a_n(M), where A = a_0(M) + a_1(M)L + ...
     A.show_newton(text=False) shows the newton polygon with dots.  The text
                       flag shows the coefficients.
     A.boundary_slopes() prints the boundary slopes detected by the character
@@ -964,7 +975,7 @@ class Apoly:
 #                options.update(hint)
 #            else:
 #                print "nope."
-        self.fft_size = options['fft_size']
+        self.fft_size = N = options['fft_size']
         self.denom = options['denom']
         self.multi = options['multi']
         self.radius = options['radius']
@@ -993,6 +1004,7 @@ class Apoly:
         if multi == False:
             self.multiplicities, vals = self.demultiply(vals)
         self.sampled_coeffs = self.symmetric_funcs(vals)
+        self.reduced_degree = len(self.sampled_coeffs)
         if self.denom:
             # denom is a polynomial in H = M^2 = holonomy of meridian.
             H = array(self.holonomizer.R_circle)
@@ -1000,37 +1012,38 @@ class Apoly:
             self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
         else:
             self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
-        self.shift, self.float_coeffs = self.find_shift(self.raw_coeffs)
+        # Renormalize, to account for R
+        if N%2 == 0:
+            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+        else:
+            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+        self.normalized_coeffs = self.raw_coeffs*renorm
+        self.int_coeffs = array([map(round, x.real)
+                                 for x in self.normalized_coeffs])
+        self.noise = self.normalized_coeffs.real - self.int_coeffs
+        self.max_noise = [max(abs(x)) for x in self.noise]
+        self.shift = self.find_shift()
         print 'Shift is %s'%self.shift
         if self.shift is None:
-            print ('Coefficients seem to be wrapping.  '
-                  'A larger fft size might help.')
+            print ('Coefficients may be wrapping.  '
+                   'If so, a larger fft size would help.')
             return
-#        renorm = self.radius**(-array(range(self.fft_size - self.shift)
-#                                      + range(-self.shift, 0)))
-#        self.float_coeffs = renorm*self.raw_coeffs
-#        print self.raw_coeffs
-#        print self.float_coeffs
-        self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
         self.height = max([max(abs(x)) for x in self.int_coeffs])
         if self.height > float(2**52):
             print "Coefficients overflowed."
         C = self.int_coeffs.transpose()
         coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
         rows, cols = coefficient_array.shape
-#        print rows, cols, coefficient_array
         while rows > 0:
             if max(abs(coefficient_array[rows-1])) > 0:
                 break
             rows -= 1
         # This failed on 9_39 -- needs to remove empty rows
         self.coefficients = coefficient_array[:rows]
-        self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
-                      i in range(len(self.float_coeffs))]
         print "Noise levels: "
-        for level in self.noise:
+        for level in self.max_noise:
             print level
-        if max(self.noise) > 0.1:
+        if max(self.max_noise) > 0.1:
             print 'Failed to find integer coefficients'
             return
         print 'Computing the Newton polygon.'
@@ -1104,25 +1117,21 @@ class Apoly:
        return max(shifts), coeffs
 
     # This is the new one
-    def find_shift(self, raw_coeffs, cutoff=0.1):
+    def find_shift(self, cutoff=0.1):
         """
         Decide how many negative powers of M occur in the Laurent
-        polynomial.
+        polynomial coefficients a_n(M).
         """
         N = self.fft_size
-        # Renormalize, since R != 1.
-        if N%2 == 0:
-            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
-        else:
-            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-        float_coeffs = raw_coeffs*renorm
-        coeffs = (float_coeffs).transpose()
+        coeffs = self.normalized_coeffs.transpose()
+        # If the coefficients are large all the way to the middle, bail.
         if max(abs(coeffs[N/2])) > 0.5:
-            return None, float_coeffs
+            return None
+        # start from the bottom and go up until we hit a small row.
         for n in range(N-1, N/2, -1):
             if max(abs(coeffs[n])) < cutoff:
-                return N-1-n, float_coeffs 
-        return None, float_coeffs
+                return N-1-n 
+        return None
 
 # Should have a monomial class, and generate a list of monomials here not a string
     def monomials(self):
@@ -1280,6 +1289,15 @@ class Apoly:
 
     def show_T_longitude_evs(self):
         T_plot = Plot(self.holonomizer.T_longitude_evs)
+
+    def show_coefficients(self):
+        plot = Plot(self.normalized_coeffs.real)
+
+    def show_noise(self):
+        plot = Plot(self.noise)
+
+    def show_imag_noise(self):
+        plot = Plot(self.normalized_coeffs.imag)
 
     def show_newton(self, text=False):
         V = PolyViewer(self.newton_polygon, title=self.mfld_name)
@@ -1609,7 +1627,7 @@ class PolyViewer:
 winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
 if got_sage:
     Apoly.sage_poly = lambda self : sage_2poly(self.as_dict(), ring=QQ['M','L'])
-    PolyRelation.sage_poly = lambda self : sage_poly(self.as_dict())
+#    PolyRelation.sage_poly = lambda self : sage_poly(self.as_dict())
 
 #M = Manifold('4_1')
 #F = Fiber((-0.991020658402+0.133708842719j),
