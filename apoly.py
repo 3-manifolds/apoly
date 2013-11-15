@@ -531,10 +531,10 @@ class Holonomizer:
         start = time.time()
         self.track_satellite()
         print 'tracked in %s seconds.'%(time.time() - start)
-        try:
-            self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
-        except:
-            print 'Failed.'
+#        try:
+        self.R_longitude_holos, self.R_longitude_evs = self.longidata(self.R_fibers)
+#        except:
+#            print 'Failed.'
             
     def __call__(self, Z):
         return array([F(Z) for F in self.glunomials])
@@ -610,20 +610,25 @@ class Holonomizer:
             [self.L_holo(f.shapes[n]()) for f in fiber_list
              if not isinstance(f, int)]
             for n in xrange(self.degree)]
-        # Should choose a random fiber, not the first one.
-        F = randint(0,self.order - 1)
-        longitude_traces = self.find_longitude_traces(fiber_list[F])
+        # I tried choosing a random fiber here, and things broke badly.
+        # find_shift would get the wrong shift.
+#        if index is None:
+#            index = randint(0,self.order - 1)
+        index = 0 if not isinstance(fiber_list[0], int) else 1
+#        print 'starting index = %d'%index 
+        longitude_traces = self.find_longitude_traces(fiber_list[index])
         longitude_eigenvalues = []
         for n, L in enumerate(longitude_holonomies):
             tr = longitude_traces[n]
-            e = sqrt(L[F])
+            e = sqrt(L[index])
             E = [ e if abs(e + 1/e - tr) < abs(e + 1/e + tr) else -e ]
-            for holo in L[F+1:]:
+            for holo in L[index+1:]:
                 e = sqrt(holo)
                 E.append(e if abs(e - E[-1]) < abs(e + E[-1]) else -e )
-            for holo in L[F-1::-1]:
-                e = sqrt(holo)
-                E.insert(0,e if abs(e - E[0]) < abs(e + E[0]) else -e )
+            if index > 0:
+                for holo in L[index-1::-1]:
+                    e = sqrt(holo)
+                    E.insert(0,e if abs(e - E[0]) < abs(e + E[0]) else -e )
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
 
@@ -639,18 +644,20 @@ class Holonomizer:
         # Sage complex numbers do not support attributes .real and .imag :^(((
         trace = lambda rep : complex(rep[0,0] + rep[1,1])
         traces = []
+        G = self.manifold.fundamental_group()
+        longitude = G.peripheral_curves()[0][1]
+        relators = G.relators()
+        generators = G.generators()
         for shape in fiber.shapes:
             #  I had to move the dehn_fill((0,0)) inside the loop to get this to
             #  work correctly when there is a denominator, e.g. for 8_17.
             #  The values of the longitude traces were coming out wrong.
             #  This was not needed with SnapPeaPython --- SnapPy bug???
             #  Why is it needed at all?
-            self.manifold.dehn_fill((0,0))
-            self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
-            G = self.manifold.fundamental_group()
-            longitude = G.peripheral_curves()[0][1]
-            relators = G.relators()
-            generators = G.generators()
+#            self.manifold.dehn_fill((0,0))
+            #  This seems OK now with the new set_tetrahedra_shapes.
+            S = shape()
+            self.manifold.set_tetrahedra_shapes(S, S, [(0,0)])
             M, N = len(relators), G.num_generators()
             A = matrix(zeros((M,N),'i'))
             L = zeros(N,'i')
@@ -887,201 +894,6 @@ class PECharVariety:
                     set mxtics
                     """%(term, self.manifold_name), linewidth=2)
     
-class PolyRelation:
-    """
-    An integral polynomial relation satisfied by two coordinate
-    functions M and L in the function field of a curve defined over Q.
-    We view M as the "base element".  Then the polynomial relation is
-    just a minimal polynomial for L over Q(M).  (In practice, for
-    function fields of curves of characters, M is the holonomy of the
-    meridian.)
-    """
-    def __init__(self, Lvalues, Mvalues, radius=1.02, fft_size=128,
-                 denom=None, multi=False, gluing_form=False):
-        self.radius = radius
-        self.fft_size = fft_size
-        self.denom = denom
-        self.multi = multi
-        self.gluing_form=gluing_form
-        Larrays = [array(x) for x in Lvalues]
-        if multi == False:
-            self.multiplicities, Larrays = self.demultiply(Larrays)
-        self.sampled_coeffs = self.symmetric_funcs(Larrays)
-        if denom:
-            H = array(Mvalues)
-            exec('D = %s'%self.denom) #denom is an expression for a poly in H_M
-            self.raw_coeffs = array([ifft(x*D) for x in self.sampled_coeffs])
-        else:
-            self.raw_coeffs = array([ifft(x) for x in self.sampled_coeffs])
-        #print self.raw_coeffs.shape
-        self.shift = self.find_shift()
-        if self.shift is None:
-            print 'Coefficients seem to be wrapping.  A larger fft size might help.'
-            return
-        print 'Shift is %s.'%self.shift
-        renorm = array([self.radius])**(-array(range(self.fft_size - self.shift)
-                                      + range(-self.shift, 0)))
-        self.float_coeffs = renorm*self.raw_coeffs
-        self.height = max([max(abs(x.real)) for x in self.float_coeffs])
-        # This has problems.
-        if self.height > float(2**52):
-            print "Coefficients overflowed."
-        else:
-            self.height = round(self.height)
-        self.int_coeffs = array([map(round, x.real) for x in self.float_coeffs])
-        C = self.int_coeffs.transpose()
-        coefficient_array =  take(C, arange(len(C))-self.shift, axis=0)
-        rows, cols = coefficient_array.shape
-        # If the FFT size is large enough and we have a good denominator,
-        # we should not go past the middle
-        realrows = rows/2 - 1
-        while realrows:
-            if max(abs(coefficient_array[rows-1])) > 0:
-                break
-            if realrows:
-                realrows -= 1
-        self.coefficients = coefficient_array[:realrows]
-        self.noise = [max(abs(self.float_coeffs[i] - self.int_coeffs[i])) for
-                      i in range(len(self.float_coeffs))]
-        print "Noise levels: "
-        for level in self.noise:
-            print level
-        if max(self.noise) > 0.1:
-            print 'Failed to find integer coefficients'
-            return
-        print 'Computing the Newton polygon.'
-        power_scale = (1,1) if self.gluing_form else (1,2) 
-        self.newton_polygon = NewtonPolygon(self.as_dict(), power_scale)
-            
-    def __call__(self, M, L):
-        result = 0
-        rows, cols = self.coefficients.shape
-        for i in range(rows):
-            Lresult = 0
-            for j in range(cols):
-                Lresult = Lresult*L + self.coefficients[-1-i][-1-j]
-            result = result*M + Lresult
-        return result
-    
-    def __repr__(self):
-        digits = 2 + int(ceil(log(self.height)/log(10)))
-        width = len(self.coefficients[0])
-        format = '[' + ('%' + str(digits) + '.0f')*width + ']\n'
-        result = ''
-        for row in self.coefficients:
-            result += format%tuple(row + 0.)
-        return result
-
-    def help(self):
-        print self.__doc__
-
-    def symmetric_funcs(self, roots):
-        coeffs = [0, ones(roots[0].shape,'D')]
-        for root in roots:
-            for i in range(1, len(coeffs)):
-                coeffs[-i] = -root*coeffs[-i] + coeffs[-1-i]
-            coeffs.append(ones(roots[0].shape,'D'))
-        return coeffs[1:]
-
-    def demultiply(self, ev_list):
-            multiplicities = []
-            sdr = []
-            multis = [1]*len(ev_list)
-            for i in range(len(ev_list)):
-                unique = True
-                for j in range(i+1,len(ev_list)):
-                    if max(abs(ev_list[i] - ev_list[j])) < 1.0E-6:
-                        unique = False
-                        multis[j] += multis[i]
-                        break
-                if unique:
-                    sdr.append(i)
-                    multiplicities.append((i, multis[i]))
-            return multiplicities, [ev_list[i] for i in sdr]
-
-    def Xfind_shift(self, raw_coeffs):
-       rows, cols = raw_coeffs.shape
-       N = self.fft_size
-       R = array([self.radius])
-       shifts = [0]
-       if N%2 == 0:
-           renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
-       else:
-           renorm = R**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = raw_coeffs*renorm
-       for i in range(rows):
-          for j in range(1, 1+ cols/2):
-             if abs(abs(coeffs[i][-j]) - 1.) < .001:
-                 shifts.append(j)
-       print 'shifts: ', shifts
-       return max(shifts)
-
-    def find_shift(self, cutoff=0.1):
-       N = self.fft_size
-       R = self.radius
-       if N%2 == 0:
-           renorm = R**(-array(range(1+N/2)+range(1-N/2, 0)))
-       else:
-           renorm = R**(-array(range(1+N/2)+range(-(N/2), 0)))
-       coeffs = (self.raw_coeffs*renorm).transpose()
-       if max(abs(coeffs[N/2])) > 0.5:
-              return None
-       for n in range(1+N/2,N):
-           if max(abs(coeffs[n])) > cutoff:
-               return N - n
-       return 0
-    
-    def monomials(self):
-        rows, cols = self.coefficients.shape
-        monomials = []
-        for j in range(cols):
-            for i in range(rows):
-                if self.gluing_form:
-                    m,n = 2*i, 2*j
-                else:
-                    m,n = 2*i, j
-                a = int(self.coefficients[i][j])
-                if a != 0:
-                    if i > 0:
-                        if j > 0:
-                            monomial = '%d*(M^%d)*(L^%d)'%(a,m,n)
-                        else:
-                            monomial = '%d*(M^%d)'%(a,m)
-                    else:
-                        if j > 0:
-                            monomial = '%d*(L^%d)'%(a,n)
-                        else:
-                            monomial = '%d'%a
-                    monomials.append(monomial)
-        return monomials
-
-    def as_polynomial(self):
-        polynomial = ('+'.join(self.monomials())).replace('+-','-')
-        return polynomial
-
-    def show_newton(self, text=False):
-        # The gluing_form should be renamed.  It indicates that the
-        # polynomial is using the holonomies of the longitude, rather
-        # than the eigenvalues.  In general, it would not make sense
-        # to take square roots.
-        V = PolyViewer(self.newton_polygon())
-        V.show_sides()
-        if text:
-            V.show_text()
-        else:
-            V.show_dots()
-
-class ShapeRelation(list):
-    def __init__(self, manifold_name):
-        self.holonomizer = H = Holonomizer(manifold_name)
-        H.tighten()
-        self.shapes = [
-            [[f.shapes[m][n] for f in H.T_fibers] for m in range(H.degree)]
-            for n in range(H.dim)]
-        for shape in self.shapes:
-            self.append(PolyRelation(shape, H.T_circle, radius=1.0))
-
-#This should be derived from PolyRelation
 class Apoly:
     """
     The A-polynomial of a SnapPy manifold.  
@@ -1181,7 +993,8 @@ class Apoly:
         self.shift, self.float_coeffs = self.find_shift(self.raw_coeffs)
         print 'Shift is %s'%self.shift
         if self.shift is None:
-            print 'Coefficients seem to be wrapping.  A larger fft size might help.'
+            print ('Coefficients seem to be wrapping.  '
+                  'A larger fft size might help.')
             return
 #        renorm = self.radius**(-array(range(self.fft_size - self.shift)
 #                                      + range(-self.shift, 0)))
@@ -1260,20 +1073,46 @@ class Apoly:
                     multiplicities.append((i, multis[i]))
             return multiplicities, [ev_list[i] for i in sdr]
 
-    def find_shift(self, raw_coeffs, cutoff=0.1):
+    # this is the old version
+    def XXfind_shift(self, raw_coeffs):
+       rows, cols = raw_coeffs.shape
        N = self.fft_size
+       shifts = [0]
+       # Renormalize, since R != 1.
        if N%2 == 0:
            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
        else:
            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
-       float_coeffs = raw_coeffs*renorm
-       coeffs = (float_coeffs).transpose()
-       if max(abs(coeffs[N/2])) > 0.5:
-              return None, float_coeffs
-       for n in range(N-1, N/2, -1):
-           if max(abs(coeffs[n])) < cutoff:
-               return N-1-n, float_coeffs 
-       return 0, float_coeffs
+       coeffs = raw_coeffs*renorm
+       #start from the top and search for the last row above the middle
+       #whose left-most non-zero entry is 1.
+       for i in range(rows):
+          for j in range(1, 1+ cols/2):
+             if abs(abs(coeffs[i][-j]) - 1.) < .01:
+                 shifts.append(j)
+       print 'shifts: ', shifts
+       return max(shifts), coeffs
+
+    # This is the new one
+    def find_shift(self, raw_coeffs, cutoff=0.1):
+        """
+        Decide how many negative powers of M occur in the Laurent
+        polynomial.
+        """
+        N = self.fft_size
+        # Renormalize, since R != 1.
+        if N%2 == 0:
+            renorm = self.radius**(-array(range(1+N/2)+range(1-N/2, 0)))
+        else:
+            renorm = self.radius**(-array(range(1+N/2)+range(-(N/2), 0)))
+        float_coeffs = raw_coeffs*renorm
+        coeffs = (float_coeffs).transpose()
+        if max(abs(coeffs[N/2])) > 0.5:
+            return None, float_coeffs
+        for n in range(N-1, N/2, -1):
+            if max(abs(coeffs[n])) < cutoff:
+                return N-1-n, float_coeffs 
+        return None, float_coeffs
 
 # Should have a monomial class, and generate a list of monomials here not a string
     def monomials(self):
