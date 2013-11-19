@@ -22,6 +22,8 @@ from random import random, randint
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
 
+complex_array = numpy.vectorize(complex)
+
 # Constants for Newton method
 RESIDUAL_BOUND = 1.0E-14
 STEPSIZE_BOUND = 1.0E-14
@@ -61,6 +63,7 @@ class GluingSystem:
     the meridian holonomy (i.e. the first eigenvalue squared).
     """
     def __init__(self, manifold):
+        self.manifold = manifold.copy()
         eqns = manifold.gluing_equations('rect')
         # drop the last edge equation
         self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
@@ -80,8 +83,29 @@ class GluingSystem:
         return matrix([G.gradient(Z) for G in self.glunomials])
 
     def M_holonomy(self, Z):
-        return self.M_nomial(Z)
+        return complex(self.M_nomial(Z))
+
+    def L_holonomy(self, Z):
+        return complex(self.L_nomial(Z))
     
+    def slope(self, Z, digits=10):
+        """
+        Use LLL to guess which peripheral element is being killed by
+        the rep corresponding to shapes Z.  We look for small integers
+        p, q and n such that p*phi + q*theta = 2*pi*n where phi and
+        theta are the arguments of the meridian and longitude holonomies.
+        """
+        Hm, Hl = self.M_holonomy(Z), self.L_holonomy(Z)
+        phi, theta = log(Hm).imag, log(Hl).imag
+        N = 10**digits
+        A = pari.matrix(4, 3,
+                        [1, 0, 0,
+                         0, 1, 0,
+                         0, 0, 1,
+                         phi*N, theta*N, -2*pi*N])
+        L = A.qflll()
+        return L[0][:2]
+
     def condition(self, Z):
         """
         Return the condition numbers of the Jacobians for the defining
@@ -355,13 +379,13 @@ class Fiber:
         return True
             
     def details(self):
-        # broken if not instantiaed with a PHCsystem
+        # broken if not instantiated with a PHCsystem
         for n, s in enumerate(self.solutions):
             print 'solution #%s:'%n
             print s
 
     def residuals(self):
-        # broken if not instantiaed with a PHCsystem
+        # broken if not instantiated with a PHCsystem
         for n, s in enumerate(self.solutions):
             print n, s.res 
 
@@ -372,7 +396,7 @@ class Fiber:
             self.extract_info()
 
     def Tillmann_points(self):
-        # broken if not instantiaed with a PHCsystem
+        # broken if not instantiated with a PHCsystem
         if self.system is None:
             return []
         result = []
@@ -495,7 +519,9 @@ class PHCFibrator:
             if dT < 1.0/64:
                 raise ValueError('Collision unavoidable. Try a different radius.')
             for shapevector in start_fiber.shapes:
-                Zn = self.gluing_system.track(shapevector(), target_holonomy, dT=dT,
+                Zn = self.gluing_system.track(shapevector(),
+                                              target_holonomy,
+                                              dT=dT,
                                               debug=debug)
                 solutions.append(Zn)
             result = Fiber(target_holonomy, solutions=solutions)
@@ -687,14 +713,16 @@ class Holonomizer:
         return traces
 
     def SL2C(self, word, shape):
-        self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
+#        self.manifold.dehn_fill((0,0))
+        S = shape()
+        self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
         G = self.manifold.fundamental_group()
         return G.SL2C(word)
 
     def O31(self, word, shape):
-        self.manifold.dehn_fill((0,0))
-        self.manifold.set_tetrahedra_shapes(shape(), fillings=[(0,0)])
+#        self.manifold.dehn_fill((0,0))
+        S = shape()
+        self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
         G = self.manifold.fundamental_group()
         return G.O31(word)
 
@@ -705,13 +733,13 @@ class Holonomizer:
         for S in [self.SL2C(g, shape) for g in gens]:
             tr = complex(S[0,0] + S[1,1])
             if abs(tr.imag) > tolerance:
-                #print 'trace not real'
+#                print 'trace not real'
                 return False
             if abs(tr.real) > 2.0:
-                #print 'trace not in [-2,2]'
+#                print 'trace not in [-2,2]'
                 return False
         # Get O31 matrix generators
-        o31matrices = [self.O31(g, shape) for g in gens]
+        o31matrices = [complex_array(self.O31(g, shape)) for g in gens]
         # Take the first two
         A, B = o31matrices[:2]
         # find their axes
@@ -727,7 +755,7 @@ class Holonomizer:
         vt = transpose(v)
         rel = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
         if rel.shape != (4,1):
-            #print 'linear algebra failure'
+#            print 'linear algebra failure'
             return False
         # We have two descriptions -- average them
         rel[2] = -rel[2]
@@ -735,12 +763,12 @@ class Holonomizer:
         fix = M*rel
         # check if the fixed line is in the light cone
         if abs(fix[0]) <= norm(fix[1:]):
-            #print 'fixed line is not in the light cone'
+#            print 'fixed line is not in the light cone'
             return False
         # check if all generators fix the same point
         for O in o31matrices:
             if norm(O*fix - fix) > tolerance:
-                #print 'some generators do not share the fixed point.'
+#                print 'some generators do not share the fixed point.'
                 return False
         return True
     
@@ -803,8 +831,7 @@ def solve_mod2_system(the_matrix,rhs):
 
 class PECharVariety:
     def __init__(self, mfld, order=128, radius=1.02,
-                 holonomizer=None, su2_only=False,
-                 base_dir='base_fibers', hint_dir='hints'):
+                 holonomizer=None, base_dir='base_fibers', hint_dir='hints'):
         if isinstance(mfld, Manifold):
             self.manifold = mfld
             self.manifold_name = mfld.name()
@@ -824,7 +851,6 @@ class PECharVariety:
             self.holonomizer = holonomizer
         self.order = self.holonomizer.order
         self.manifold = self.holonomizer.manifold
-        self.build_arcs( su2_only)
 
     def build_arcs(self, su2_only=False):
         self.arcs = []
@@ -843,7 +869,7 @@ class PECharVariety:
                         su2_ok = H.in_SU2(H.T_fibers[n].shapes[m])
                     except:
                         #For now, just throw it in so we can look at it.
-                        pass
+                        su2_ok = True
                 if (0.9999 < abs(ev) < 1.0001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
                     if lastL - L > 0.5 and len(arc) > 0:
@@ -890,7 +916,8 @@ class PECharVariety:
             except TypeError:
                 pass
                         
-    def show(self):
+    def show(self, su2_only=False):
+        self.build_arcs( su2_only)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
         Plot(self.arcs, commands="""
                     set terminal %s title "%s" size 1400,700
@@ -1319,8 +1346,8 @@ class Apoly:
         result = True
         sign = None
         print 'Checking noise level ...',
-        print max(self.noise)
-        if max(self.noise) > .3:
+        print max(self.max_noise)
+        if max(self.max_noise) > .3:
             result = False
             print 'Failed'
         print 'Checking for reciprocal symmetry ... ',
@@ -1468,7 +1495,8 @@ class Plot:
             self.type = 'complex'
         elif 'float' in str(self.type):
             self.type = 'float'
-        self.gnuplot = Popen(['gnuplot', '-geometry 1200x1000+200+0'],
+        self.gnuplot = Popen(['export LD_LIBRARY_PATH= ; gnuplot',
+                              '-geometry 1200x1000+200+0'],
                              shell=True,
                              stdin=PIPE)
         if len(self.data) > 1:
@@ -1493,7 +1521,7 @@ class Plot:
         elif self.type == 'float':
             for n in funcs:
                 gnuplot_input += '\n'.join(
-                    ['%f'%point for point in self.data[n]] + ['e\n']) 
+                    ['%f'%float(point) for point in self.data[n]] + ['e\n']) 
         else:
             print self.type
             print self.data[0]
