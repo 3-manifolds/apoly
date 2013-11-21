@@ -31,7 +31,7 @@ class PSL2CRepOf3ManifoldGroup:
             self.manifold.set_tetrahedra_shapes(rough_shapes, fillings = manifold.cusp_info('filling'))
 
     def __repr__(self):
-        return "<%s" % self.manifold + ": [" + ",".join(["%.3f" % z for z in self.rough_shapes]) + "]>"
+        return "<%s" % self.manifold + ": [" + ",".join(["%s" % z for z in self.rough_shapes]) + "]>"
 
     def _update_precision(self, precision):
         if precision != None:
@@ -69,7 +69,7 @@ class PSL2CRepOf3ManifoldGroup:
         self._update_precision(precision)
         real_precision = self.precision if self.precision else 15
         max_imaginary_part = max([ abs(tr.imag()) for tr in self.trace_field_generators()] )
-        return  max_imaginary_part  <  RR(10.0)**(-0.5*real_precision)
+        return  max_imaginary_part  <  RR(2.0)**(-0.5*real_precision)
 
     def appears_to_be_SU2_rep(self, trys=100, N = 20):
         G = self.polished_holonomy()
@@ -180,7 +180,7 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
 
         mangled = "polished_holonomy_%s" % precision
         if not self._cache.has_key(mangled):
-            epsilon = RR(10.0)**(-0.8*precision)
+            epsilon = RR(2.0)**(-0.8*precision)
             G = snappy.snap.polished_holonomy(self.manifold, precision,
                                                lift_to_SL2=False, ignore_solution_type=True)
             real_with_errors = [real_part_of_matrix_with_error(G.SL2C(g)) for g in G.generators()]
