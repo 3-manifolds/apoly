@@ -24,6 +24,9 @@ class CheckRepresentationFailed(Exception):
     pass
     
 class PSL2CRepOf3ManifoldGroup:
+    """
+    Throughout precision is in bits.
+    """
     def __init__(self, manifold, rough_shapes=None, precision=100):
         self.manifold, self.rough_shapes, self.precision = manifold.copy(), rough_shapes, precision
         self._cache = {}
