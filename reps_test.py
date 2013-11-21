@@ -22,4 +22,56 @@ def basic_test():
         rho_real = PSL2RRepOf3ManifoldGroup(rho)
         print rho.manifold, rho_real.representation_lifts()
 
-basic_test()
+#basic_test()
+
+def right_kernel_two_by_two(A):
+    """
+    For a 2x2 matrix A over an approximate field like RR or CC find an
+    element in the right kernel.
+    """
+    CC = A.base_ring()
+    prec = CC.precision()
+    epsilon = (RealField()(2.0))**(-0.8*prec)
+    assert abs(A.determinant()) < epsilon
+    a, b = A[0]
+    v = vector(CC, [1, -a/b]) if abs(b) > abs(a) else vector(CC, [-b/a, 1])
+    assert (A*v).norm() < epsilon
+    return v/v.norm()
+    
+def eigenvectors(A):
+    """
+    Returns the two eigenvectors of a loxodromic matrix A
+    """
+    CC = A.base_ring()
+    return [right_kernel_two_by_two(A-eigval) for eigval in A.charpoly().roots(CC, False)]
+    
+def eigenbasis(A, B):
+    """
+    Given loxodromic matrices A and B return a basis of C^2 consisting of
+    one eigenvector from each. 
+    """
+    basis = [ (a, b) for a in eigenvectors(A) for b in eigenvectors(B) ]
+    return matrix(min(basis, key=lambda (a,b) : abs(a*b))).transpose()
+
+def conjugate_to_PSL2R(A, B):
+    C = eigenbasis(A, B)
+    BB = (C**-1*A*C)
+    t = 1/BB[1,1]
+    C = C * matrix(B.base_ring(), [[1, 0], [0, t]])
+    return (C**-1*A*C).change_ring(CDF), (C**-1*B*C).change_ring(CDF)
+
+
+
+
+
+
+
+
+
+
+
+   
+
+
+
+  
