@@ -503,6 +503,9 @@ class PHCFibrator:
 	   print 'PHC parse error on %s+%sj'%(real,imag)
 
     def transport(self, start_fiber, target_holonomy, allow_collisions=False):
+        """
+        Use PHC to transport fibers.
+        """
         target_system = self.psystem.transport(start_fiber.system,
                                                target_holonomy,
                                                allow_collisions)
