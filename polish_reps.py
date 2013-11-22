@@ -5,6 +5,35 @@ import snappy, snappy.snap, euler
 def random_word(letters, N):
     return ''.join( [random.choice(letters) for i in range(N)] )
 
+def inverse_word(word):
+    return word.swapcase()[::-1]
+
+def words_in_Fn(gens, n):
+    next_letter = dict()
+    sym_gens = gens + [g.swapcase() for g in gens]
+    for g in sym_gens:
+        next_letter[g] = [h for h in sym_gens if h != g.swapcase()]
+    if n == 1:
+        return sym_gens
+    else:
+        words = words_in_Fn(gens, n - 1)
+        ans = []
+        for word in words:
+            ans += [word + g for g in next_letter[word[-1]] if len(word) == n - 1]
+        return words + ans
+
+def is_lex_first_in_conjugacy_class(word):
+    if word[0] == word[-1].swapcase():
+        return False
+    for i in range(len(word)):
+        other = word[i:] + word[:i]
+        if other < word or other.swapcase() < word:
+            return False
+    return True
+    
+def conjugacy_classes_in_Fn(gens, n):
+    return [word for word in words_in_Fn(gens, n) if is_lex_first_in_conjugacy_class(word)]
+
 def SL2C_inverse(A):
     B = copy(A)
     B[0,0], B[1,1] = A[1,1], B[0,0]
@@ -74,14 +103,15 @@ class PSL2CRepOf3ManifoldGroup:
         max_imaginary_part = max([ abs(tr.imag()) for tr in self.trace_field_generators()] )
         return  max_imaginary_part  <  RR(2.0)**(-0.5*real_precision)
 
-    def appears_to_be_SU2_rep(self, trys=100, N = 20):
+    def appears_to_be_SU2_rep(self, depth=5, trys=50, rand_length = 20):
         G = self.polished_holonomy()
-        for i in range(trys):
-            w = random_word(G.generators(), N)
+        gens = G.generators()
+        words = conjugacy_classes_in_Fn(gens, depth)
+        words += [random_word(gens, rand_length) for i in range(trys)]
+        for w in words:
             d = abs(self(w).trace())
             if d > 2.1:
                 return False
-
         return True
 
     def is_PSL2R_rep(self):
@@ -150,6 +180,10 @@ def real_part_of_matrix_with_error(A):
         B = -B
     return B, error
 
+def real_part_of_matricies_with_error(matrices):
+    real_with_errors = [real_part_of_matrix_with_error(A) for A in matrices]
+    return [r for r,e in real_with_errors], max(e for r, e in real_with_errors)
+
 def normalize_vector(v):
     return v/v.norm()
 
@@ -164,6 +198,64 @@ def orientation(a, b, c):
 
 def dist(a,b):
     return (a - b).norm()
+
+def right_kernel_two_by_two(A):
+    """
+    For a 2x2 matrix A over an approximate field like RR or CC find an
+    element in the right kernel.
+    """
+    CC = A.base_ring()
+    prec = CC.precision()
+    epsilon = (RealField()(2.0))**(-0.8*prec)
+    assert abs(A.determinant()) < epsilon
+    a, b = A[0]
+    v = vector(CC, [1, -a/b]) if abs(b) > abs(a) else vector(CC, [-b/a, 1])
+    assert (A*v).norm() < epsilon
+    return v/v.norm()
+    
+def eigenvectors(A):
+    """
+    Returns the two eigenvectors of a loxodromic matrix A
+    """
+    CC = A.base_ring()
+    return [right_kernel_two_by_two(A-eigval) for eigval in A.charpoly().roots(CC, False)]
+    
+def eigenbasis(A, B):
+    """
+    Given loxodromic matrices A and B, return a basis of C^2 consisting of
+    one eigenvector from each. 
+    """
+    basis = [ (a, b) for a in eigenvectors(A) for b in eigenvectors(B) ]
+    return matrix(min(basis, key=lambda (a,b) : abs(a*b))).transpose()
+
+def conjugator_into_PSL2R(A, B):
+    """
+    Given loxodromic matrices A and B which lie in a common conjugate of
+    PSL(2, R), return a matrix C so that C^(-1)*A*C and C^(-1)*B*C are in
+    PSL(2, R) itself.
+    """
+    C = eigenbasis(A, B)
+    AA = (C**-1*A*C)
+    return C * matrix(A.base_ring(), [[1, 0], [0, 1/AA[0,1]]])
+
+def conjugate_into_PSL2R(rho, max_error, depth=5):
+    gens = rho.generators()
+    new_mats, error = real_part_of_matricies_with_error(rho(g) for g in gens)
+    if error < max_error:
+        return new_mats
+
+    for word in conjugacy_classes_in_Fn(gens, depth):
+        U = rho(word)
+        if abs(U.trace()) > 2.0001:
+            conjugates = [ rho(g)*U*rho(g.upper()) for g in gens ]
+            V = max(conjugates, key=lambda M: (U - M).norm())
+            C =  conjugator_into_PSL2R(U, V)
+            new_mats = [(C**-1) * rho(g) * C for g in gens]
+            new_mats, error = real_part_of_matricies_with_error(new_mats)
+            assert error < max_error
+            return new_mats
+
+    raise ValueError("Couldn't conjugate into PSL(2, R)")
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
     def __init__(self, rep_or_manifold, rough_shapes=None, precision=None):
@@ -186,17 +278,8 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
             epsilon = RR(2.0)**(-0.8*precision)
             G = snappy.snap.polished_holonomy(self.manifold, precision,
                                                lift_to_SL2=False, ignore_solution_type=True)
-            real_with_errors = [real_part_of_matrix_with_error(G.SL2C(g)) for g in G.generators()]
-            if max( [e for r, e in real_with_errors] )  > epsilon:
-                # This sometimes works:
-                CC = G.SL2C('a').base_ring()
-                i = CC.gen()
-                A = matrix(CC, [[i,0],[0,1]])
-                real_with_errors = [real_part_of_matrix_with_error(
-                    A*G.SL2C(g)*(A**-1)) for g in G.generators()]
-                assert [e for r,e in real_with_errors] < epsilon
-                                                          
-            new_mats = [r for r, e in real_with_errors]
+
+            new_mats = conjugate_into_PSL2R(G, epsilon)
             def rho(word):
                 return apply_representation(word, new_mats)
             G.SL2C = rho
