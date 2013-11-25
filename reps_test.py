@@ -22,16 +22,20 @@ sample_data = [
 def sample_rep(index, precision):
     name, shapes = sample_data[index]
     M = snappy.Manifold(name)
-    return PSL2RRepOf3ManifoldGroup(M, shapes, precision)
+    return PSL2RRepOf3ManifoldGroup(M, shapes, precision, [True, False, True])
     
 
 def basic_test():
     for i in range(len(sample_data)):
         rho = sample_rep(i, 1000)
         error = rho.polished_holonomy().check_representation()
-        print rho.manifold, error.log(2).ceil(), rho.euler_class()
+        print rho.polished_holonomy()
+        #print rho.manifold, error.log(2).ceil(), rho.euler_class()
 
 basic_test()
+
+#rho = sample_rep(-1, 1000)
+#print rho.polished_holonomy()
 
 
 
