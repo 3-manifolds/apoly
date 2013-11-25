@@ -167,16 +167,24 @@ def thurston_cocycle_of_homs(f1, f2, b, samples=3):
     return orientation(b, f1*b, (f1*f2)*b)
 
 class LiftedFreeGroupRep:
-    def __init__(self, rho):
-        self.rho = rho
-
-    def __call__(self, x):
-        if x == x.lower():
-            return PSL2RtildeElement(self.rho(x), 0)
-        else:
-            return PSL2RtildeElement(self.rho(x.lower()), 0).inverse()
+    def __init__(self, group, images=None):
+        gens = group.generators()
+        if images is None:
+            images = [group(g) for g in gens]
+        gen_images = dict()
+        for g, A in zip(gens, images):
+            Atil = PSL2RtildeElement(A, 0)
+            gen_images[g] = Atil
+            gen_images[g.upper()] = Atil.inverse()
+        self.gen_images = gen_images
+ 
+    def __call__(self, word):
+        ims = self.gen_images
+        ans = ims[word[0]]
+        for w in word[1: ]:
+            ans = ans * ims[w]
+        return ans
         
-    
     
 def euler_cocycle_of_relation(rho, rel):
     """
@@ -184,11 +192,8 @@ def euler_cocycle_of_relation(rho, rel):
     """
     R = rho('a').base_ring()
     p = R.random_element()
-    R_til = PSL2RtildeElement(identity_matrix(R, 2), 0)
     rho_til = LiftedFreeGroupRep(rho)
-    ims = [rho_til(x) for x in rel]
-    for f in ims:
-        R_til = R_til * f
+    R_til = rho_til(rel)
     assert R_til.is_central()
     return -R_til.s
     
