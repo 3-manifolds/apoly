@@ -30,7 +30,7 @@ def norm(v):
 def orientation(a, b, c):
     return cmp( swapped_dot(a,b) * swapped_dot(b,c) * swapped_dot(c, a), 0)
 
-def SL2C_inverse(A):
+def SL2_inverse(A):
     return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
 class PointInP1R():
@@ -141,7 +141,7 @@ class PSL2RtildeElement:
 
     def inverse(self):
         A, s = self.A, self.s
-        Ainv = SL2C_inverse(A)
+        Ainv = SL2_inverse(A)
         return PSL2RtildeElement(Ainv, -self.s - univ_euler_cocycle(A, Ainv))
 
     def __mul__(self, other):
@@ -161,7 +161,7 @@ class PSL2RtildeElement:
 #RR = RealField(100)
 #A = matrix(RR, [[1,2],[-3,-5]])
 #At = PSL2RtildeElement(A, 0)
-#Ait = PSL2RtildeElement(A**-1, 0)
+#Ait = PSL2RtildeElement(SL2_inverse(A), 0)
 
 def thurston_cocycle_of_homs(f1, f2, b, samples=3):
     return orientation(b, f1*b, (f1*f2)*b)

@@ -53,11 +53,13 @@ class PSL2CRepOf3ManifoldGroup:
     """
     Throughout precision is in bits.
     """
-    def __init__(self, manifold, rough_shapes=None, precision=100):
+    def __init__(self, manifold, rough_shapes=None, precision=100, fundamental_group_args=tuple()):
         self.manifold, self.rough_shapes, self.precision = manifold.copy(), rough_shapes, precision
+        self.fundamental_group_args = fundamental_group_args
         self._cache = {}
         if rough_shapes != None:
             self.manifold.set_tetrahedra_shapes(rough_shapes, fillings = manifold.cusp_info('filling'))
+        
 
     def __repr__(self):
         return "<%s" % self.manifold + ": [" + ",".join(["%s" % z for z in self.rough_shapes]) + "]>"
@@ -73,10 +75,11 @@ class PSL2CRepOf3ManifoldGroup:
         mangled = "polished_holonomy_%s" % precision
         if not self._cache.has_key(mangled):
             if precision == None:
-                G = self.manifold.fundamental_group()
+                G = self.manifold.fundamental_group(*self.fundamental_group_args)
             else:
                 G = snappy.snap.polished_holonomy(self.manifold, bits_prec=precision,
-                                                   lift_to_SL2=False, ignore_solution_type=True)
+                                        fundamental_group_args=self.fundamental_group_args,
+                                        lift_to_SL2=False, ignore_solution_type=True)
                 if not G.check_representation() < RR(2.0)**(-0.8*precision):
                     raise CheckRepresentationFailed
 
@@ -255,13 +258,16 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
     raise ValueError("Couldn't conjugate into PSL(2, R)")
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
-    def __init__(self, rep_or_manifold, rough_shapes=None, precision=None):
+    def __init__(self, rep_or_manifold, rough_shapes=None,
+                 precision=None, fundamental_group_args=tuple()):
         if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
             rep = rep_or_manifold
         else:
-            rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, rough_shapes, precision)
+            rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, rough_shapes,
+                                           precision, fundamental_group_args)
 
         self.manifold, self.rough_shapes, self.precision = rep.manifold, rep.rough_shapes, rep.precision
+        self.fundamental_group_args = rep.fundamental_group_args
         self._cache = {}
 
     def polished_holonomy(self, precision=None):
@@ -274,7 +280,8 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         if not self._cache.has_key(mangled):
             epsilon = RR(2.0)**(-0.8*precision)
             G = snappy.snap.polished_holonomy(self.manifold, precision,
-                                               lift_to_SL2=False, ignore_solution_type=True)
+                                    fundamental_group_args=self.fundamental_group_args,
+                                    lift_to_SL2=False, ignore_solution_type=True)
 
             new_mats = conjugate_into_PSL2R(G, epsilon)
             def rho(word):
