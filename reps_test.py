@@ -1,5 +1,7 @@
 from polish_reps import PSL2CRepOf3ManifoldGroup, PSL2RRepOf3ManifoldGroup
+import euler
 import snappy
+from sage.all import matrix, ZZ
 
 sample_data = [
                ('m004(3,2)', [0.48886560625734599, 0.25766090533555303]), 
@@ -23,18 +25,58 @@ def sample_rep(index, precision):
     name, shapes = sample_data[index]
     M = snappy.Manifold(name)
     return PSL2RRepOf3ManifoldGroup(M, shapes, precision, [True, False, True])
+
+def sample_rep_with_peripheral_renormalization(index, precision):
+    name, shapes = sample_data[index]
+    M = snappy.Manifold(name)
+    M.set_peripheral_curves('fillings')
+    return PSL2RRepOf3ManifoldGroup(M, shapes, precision, [True, False, True])
     
 
 def basic_test():
     for i in range(len(sample_data)):
         rho = sample_rep(i, 1000)
         error = rho.polished_holonomy().check_representation()
-        #print rho.polished_holonomy()
-        print rho.manifold, error.log(2).ceil(), rho.euler_class()
+        print rho.manifold, rho.manifold.homology(), error.log(2).ceil(), rho.representation_lifts()
+        
 
-basic_test()
+def lift_on_cusped_manifold(rho):
+    rels = rho.relators()[:-1]
+    euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
+    D = rho.coboundary_1_matrix()[:-1]
+    M = matrix(ZZ, [euler_cocycle] + D.columns())
+    k = M.left_kernel().basis()[0]
+    assert k[0] == 1
+    shifts = (-k)[1:]
+    good_lifts = [euler.PSL2RtildeElement(rho(g), s)
+                  for g, s in zip(rho.generators(), shifts)]
+    rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
+    return rho_til
+
+def shift_of_central(A_til):
+    assert A_til.is_central()
+    return A_til.s
+
+def current_test():
+    for i in [k for k in range(len(sample_data)) if not k in [1]]:
+        rho = sample_rep_with_peripheral_renormalization(i, 1000)
+        meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+        error = rho.polished_holonomy().check_representation()
+        print sample_data[i][0],  rho.manifold.homology(), error.log(2).ceil(), rho.representation_lifts()
+        rho_til = lift_on_cusped_manifold(rho)
+        print "   euler cocycle: ", [-shift_of_central(rho_til(R)) for R in rho.relators()]
+        print "   cobdr 1: ", repr(rho.coboundary_1_matrix()).replace('\n', '\n' + 13*' ')
+        print "   meridian: ", rho_til(meridian)
+        print "   longitude: ", rho_til(longitude), '\n'
+        
+
+    
+
+current_test()
 
 #rho = sample_rep(-1, 1000)
+#D = lift_on_cusped_manifold(rho)
+
 #print rho.polished_holonomy()
 
 

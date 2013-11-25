@@ -170,10 +170,9 @@ class LiftedFreeGroupRep:
     def __init__(self, group, images=None):
         gens = group.generators()
         if images is None:
-            images = [group(g) for g in gens]
+            images = [PSL2RtildeElement(group(g), 0) for g in gens]
         gen_images = dict()
-        for g, A in zip(gens, images):
-            Atil = PSL2RtildeElement(A, 0)
+        for g, Atil in zip(gens, images):
             gen_images[g] = Atil
             gen_images[g.upper()] = Atil.inverse()
         self.gen_images = gen_images
@@ -190,9 +189,10 @@ def euler_cocycle_of_relation(rho, rel):
     """
     Not sure where the sign comes from, but hey. 
     """
-    R = rho('a').base_ring()
-    p = R.random_element()
-    rho_til = LiftedFreeGroupRep(rho)
+    if isinstance(rho, LiftedFreeGroupRep):
+        rho_til = rho
+    else:
+        rho_til = LiftedFreeGroupRep(rho)
     R_til = rho_til(rel)
     assert R_til.is_central()
     return -R_til.s
