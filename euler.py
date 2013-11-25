@@ -24,14 +24,14 @@ from sage.all import *
 def swapped_dot(a, b):
     return -a[0]*b[1] + a[1]*b[0]
 
+def norm(v):
+    return sqrt(v[0]*v[0]+ v[1]*v[1])
+
 def orientation(a, b, c):
     return cmp( swapped_dot(a,b) * swapped_dot(b,c) * swapped_dot(c, a), 0)
 
 def SL2C_inverse(A):
-    B = copy(A)
-    B[0,0], B[1,1] = A[1,1], B[0,0]
-    B[0,1], B[1,0] = -A[0,1], -B[1,0]
-    return B
+    return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
 class PointInP1R():
     """
@@ -50,11 +50,11 @@ class PointInP1R():
         self.v = self.normalize(vector(v))
 
     def normalize(self, v):
-        v = v/v.norm()
+        v = v/norm(v)
         if v[1] < 0:
             v = -v
-        V = v.parent()
-        if v == V([-1, 0]):
+        R = v.base_ring()
+        if v[0] == R(-1) and v[1] == R(0):
             v = -v 
         return v
 

@@ -35,10 +35,7 @@ def conjugacy_classes_in_Fn(gens, n):
     return [word for word in words_in_Fn(gens, n) if is_lex_first_in_conjugacy_class(word)]
 
 def SL2C_inverse(A):
-    B = copy(A)
-    B[0,0], B[1,1] = A[1,1], B[0,0]
-    B[0,1], B[1,0] = -A[0,1], -B[1,0]
-    return B
+    return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
 def apply_representation(word, gen_images):
     gens = string.ascii_lowercase[:len(gen_images)]
