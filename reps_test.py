@@ -22,7 +22,7 @@ sample_data = [
 def sample_rep(index, precision):
     name, shapes = sample_data[index]
     M = snappy.Manifold(name)
-    return PSL2CRepOf3ManifoldGroup(M, shapes, precision)
+    return PSL2RRepOf3ManifoldGroup(M, shapes, precision)
     
 
 def basic_test():
@@ -32,7 +32,7 @@ def basic_test():
         error = rho_real.polished_holonomy().check_representation()
         print rho.manifold, error.log(2).ceil(), rho_real.representation_lifts()
 
-basic_test()
+#basic_test()
 
 
 
@@ -40,8 +40,8 @@ basic_test()
 
 
 
+rho = sample_rep(5, 1000)
 
-   
 
 
 

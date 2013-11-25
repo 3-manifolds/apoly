@@ -27,6 +27,11 @@ def swapped_dot(a, b):
 def orientation(a, b, c):
     return cmp( swapped_dot(a,b) * swapped_dot(b,c) * swapped_dot(c, a), 0)
 
+def SL2C_inverse(A):
+    B = copy(A)
+    B[0,0], B[1,1] = A[1,1], B[0,0]
+    B[0,1], B[1,0] = -A[0,1], -B[1,0]
+    return B
 
 class PointInP1R():
     """
@@ -74,7 +79,7 @@ def sigma_action(A, x):
     """
     For the projective tranformation given by the matrix
     A, there is a unique lift sigma(A) to Homeo(R) where
-    signa(A)(0) is in [0, 1)
+    sigma(A)(0) is in [0, 1)
     """
     R = x.parent()
     p0, p1 = A*PointInP1R( vector(R, (1,0) )), A*PointInP1R(t=x)
@@ -136,7 +141,8 @@ class PSL2RtildeElement:
 
     def inverse(self):
         A, s = self.A, self.s
-        return PSL2RtildeElement(A**-1, -self.s - univ_euler_cocycle(A, A**-1))
+        Ainv = SL2C_inverse(A)
+        return PSL2RtildeElement(Ainv, -self.s - univ_euler_cocycle(A, Ainv))
 
     def __mul__(self, other):
         A, s, B, t= self.A, self.s, other.A, other.s
@@ -183,7 +189,6 @@ def euler_cocycle_of_relation(rho, rel):
     ims = [rho_til(x) for x in rel]
     for f in ims:
         R_til = R_til * f
-
     assert R_til.is_central()
     return -R_til.s
     
