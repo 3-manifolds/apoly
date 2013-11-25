@@ -325,8 +325,6 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         return False
                 
     def __repr__(self):
-        shapes = "[" + ",".join(["%.3f" % z for z in self.rough_shapes]) + "]"
-        traces = "[" + ",".join(["%.3f" % z for z in self.trace_field_generators()]) + "]"
+        shapes = "[" + ",".join(["%s" % z for z in self.rough_shapes]) + "]"
+        traces = "[" + ",".join(["%s" % z for z in self.trace_field_generators()]) + "]"
         return "<%s" % self.manifold + ": " + traces + ">"
-
-    
