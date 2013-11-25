@@ -27,21 +27,11 @@ def sample_rep(index, precision):
 
 def basic_test():
     for i in range(len(sample_data)):
-        rho = sample_rep(i, 10000)
-        rho_real = PSL2RRepOf3ManifoldGroup(rho)
-        error = rho_real.polished_holonomy().check_representation()
-        print rho.manifold, error.log(2).ceil(), rho_real.representation_lifts()
+        rho = sample_rep(i, 1000)
+        error = rho.polished_holonomy().check_representation()
+        print rho.manifold, error.log(2).ceil(), rho.euler_class()
 
-#basic_test()
-
-
-
-
-
-
-
-rho = sample_rep(5, 1000)
-
+basic_test()
 
 
 
