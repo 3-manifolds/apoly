@@ -1,7 +1,8 @@
-from polish_reps import PSL2CRepOf3ManifoldGroup, PSL2RRepOf3ManifoldGroup
+from polish_reps import *
+from euler import *
 import euler
 import snappy
-from sage.all import matrix, ZZ
+from sage.all import *
 
 sample_data = [
                ('m004(3,2)', [0.48886560625734599, 0.25766090533555303]), 
@@ -53,6 +54,36 @@ def lift_on_cusped_manifold(rho):
     rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
     return rho_til
 
+def elliptic_fixed_point(A):
+    assert abs(A.trace()) <= 2
+    R = A.base_ring()
+    C = R.complex_field()
+    x = PolynomialRing(R, 'x').gen()
+    a, b, c, d = A.list()
+    p = c*x*x + (d - a)*x - b
+    if p == 0:
+        return CC.gen()
+    return max(p.roots(CC, False), key=lambda z:z.imag())
+
+def elliptic_rotation_angle(A):
+    z = elliptic_fixed_point(A)
+    
+    a, b, c, d = A.list()
+    derivative = 1/(c*z + d)**2
+    pi = A.base_ring().pi()
+    r = -derivative.argument()
+    if r < 0:
+        r = r + 2*pi
+    return r/(2*pi)
+    
+def translation_amount(A_til):
+    return elliptic_rotation_angle(A_til.A) + A_til.s
+
+def rot(R, t, s):
+    t = R.pi()*R(t)
+    A = matrix(R, [[cos(t), -sin(t)], [sin(t), cos(t)]])
+    return euler.PSL2RtildeElement(A, s)
+
 def shift_of_central(A_til):
     assert A_til.is_central()
     return A_til.s
@@ -66,13 +97,30 @@ def current_test():
         rho_til = lift_on_cusped_manifold(rho)
         print "   euler cocycle: ", [-shift_of_central(rho_til(R)) for R in rho.relators()]
         print "   cobdr 1: ", repr(rho.coboundary_1_matrix()).replace('\n', '\n' + 13*' ')
-        print "   meridian: ", rho_til(meridian)
-        print "   longitude: ", rho_til(longitude), '\n'
-        
+        print "   new meridian: ", rho_til(meridian)
+        print "   new longitude: ", rho_til(longitude)
+
+        rho =  sample_rep(i, 1000)
+        meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+        if abs(rho(meridian).trace()) <= 2 and abs(rho(longitude).trace()) <=2:
+            p, q = map(int, rho.manifold.cusp_info(0).filling)
+            if p < 0:
+                meridian = inverse_word(meridian)
+            if q <0:
+                longitude = inverse_word(longitude)
+            rho_til = lift_on_cusped_manifold(rho)
+            m_shift = translation_amount(rho_til(meridian))
+            l_shift = translation_amount(rho_til(longitude))
+            combo = abs(p)*m_shift + abs(q)*l_shift
+            print "   old meridian trans: ", RDF(m_shift)
+            print "   old longitude trans: ", RDF(l_shift)
+            print "   shift of filling curve: ", RDF(combo)
+        print "\n"
+
 
     
 
-current_test()
+#current_test()
 
 #rho = sample_rep(-1, 1000)
 #D = lift_on_cusped_manifold(rho)
