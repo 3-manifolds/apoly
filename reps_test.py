@@ -104,14 +104,10 @@ def current_test():
         meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
         if abs(rho(meridian).trace()) <= 2 and abs(rho(longitude).trace()) <=2:
             p, q = map(int, rho.manifold.cusp_info(0).filling)
-            if p < 0:
-                meridian = inverse_word(meridian)
-            if q <0:
-                longitude = inverse_word(longitude)
             rho_til = lift_on_cusped_manifold(rho)
             m_shift = translation_amount(rho_til(meridian))
             l_shift = translation_amount(rho_til(longitude))
-            combo = abs(p)*m_shift + abs(q)*l_shift
+            combo = p*m_shift + q*l_shift
             print "   old meridian trans: ", RDF(m_shift)
             print "   old longitude trans: ", RDF(l_shift)
             print "   shift of filling curve: ", RDF(combo)
@@ -120,7 +116,7 @@ def current_test():
 
     
 
-#current_test()
+current_test()
 
 #rho = sample_rep(-1, 1000)
 #D = lift_on_cusped_manifold(rho)
