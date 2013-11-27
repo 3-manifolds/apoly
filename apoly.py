@@ -1498,6 +1498,8 @@ class Plot:
             self.type = 'complex'
         elif 'float' in str(self.type):
             self.type = 'float'
+        else:
+            print 'Type is:', self.type
         self.gnuplot = Popen(['export LD_LIBRARY_PATH= ; gnuplot',
                               '-geometry 1200x1000+200+0'],
                              shell=True,
