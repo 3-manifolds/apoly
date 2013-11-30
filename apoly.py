@@ -22,6 +22,9 @@ from random import random, randint
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
 
+from plot import GnuplotPlot as Plot
+#from plot import SagePlot as Plot
+
 complex_array = numpy.vectorize(complex)
 
 # Constants for Newton method
@@ -1476,84 +1479,7 @@ class NewtonPolygon:
               m, n = slope
               result.append(P(t**n,t**m))
 
-        
-class Plot:
-    """
-    Uses gnuplot to plot a vector or list of vectors.
-    Assumes that all vectors in the list are the same type (Float or Complex)
-    Prompts for which ones to show.
-    """
-    def __init__(self, data, quiet=True, commands='', linewidth=2, style='lines'):
-        self.quiet = quiet
-        self.commands = commands
-        self.linewidth=linewidth
-        self.style = style
-        if isinstance(data[0], list) or isinstance(data[0], ndarray):
-            self.data = data
-        else:
-            self.data = [data]
-        duck = data[0][0]
-        self.type = type(duck)
-        if 'complex' in str(self.type):
-            self.type = 'complex'
-        elif 'float' in str(self.type):
-            self.type = 'float'
-        else:
-            print 'Type is:', self.type
-        self.gnuplot = Popen(['export LD_LIBRARY_PATH= ; gnuplot',
-                              '-geometry 1200x1000+200+0'],
-                             shell=True,
-                             stdin=PIPE)
-        if len(self.data) > 1:
-            self.show_plots()
-        else:
-            self.create_plot([0])
-            time.sleep(1)
-        
-    def __repr__(self):
-        return ''
-    
-    def create_plot(self, funcs):
-        spec = []
-        for n in funcs:
-            spec.append('"-" t "%d" w %s lw %s'%(n, self.style, self.linewidth))
-        gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
-        if self.type == 'complex':
-            for n in funcs:
-                gnuplot_input += '\n'.join([
-                    '%f %f'%(point.real, point.imag) if point is not None else ''
-                    for point in self.data[n]] + ['e\n']) 
-        elif self.type == 'float':
-            for n in funcs:
-                gnuplot_input += '\n'.join(
-                    ['%f'%float(point) for point in self.data[n]] + ['e\n']) 
-        else:
-            print self.type
-            print self.data[0]
-            raise ValueError('Data must consist of vectors of real or complex numbers.')
-        self.gnuplot.stdin.write(gnuplot_input)
-        
-    def show_plots(self):
-        if not self.quiet:
-            print 'There are %d functions.'%len(self.data)
-            print 'Which ones do you want to see?'
-        else:
-            self.create_plot( range(len(self.data)) )
-        while 1:
-            try:
-                stuff = raw_input('plot> ')
-                items = stuff.split()
-                if len(items) and items[0] == 'all':
-                    funcs = range(len(self.data))
-                else:
-                    funcs = [int(item)%len(self.data) for item in items]
-                if len(funcs) == 0:
-                    break
-            except ValueError:
-                break
-            print funcs
-            self.create_plot(funcs)
-        return
+
 
 class PolyViewer:
       def __init__(self, newton_poly, title=None, scale=None, margin=50):
