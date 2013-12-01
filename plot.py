@@ -74,7 +74,7 @@ class GnuplotPlot(Plot):
     Prompts for which ones to show.
     """
     def start_plotter(self):
-        self.gnuplot = Popen(['export DYLD_LIBRARY_PATH= ; gnuplot',
+        self.gnuplot = Popen(['export DYLD_LIBRARY_PATH= ;export LD_LIBRARY_PATH= ;gnuplot',
                               '-geometry 1200x1000+200+0'],
                              shell=True,
                              stdin=PIPE)
