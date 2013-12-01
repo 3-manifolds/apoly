@@ -1,5 +1,25 @@
 """
-Plotting using matplotlib (included in Sage) and Tkinter.
+Plotting using matplotlib and Tkinter.
+
+Matplotlib does all the 2D graphics for Sage, but unfortunately none of
+its GUI backends are compiled by default.  The following suffices to
+compile the Tk backend on Linux, provided you have the tk-dev(el)
+package installed:
+
+  export SAGE_MATPLOTLIB_GUI=yes; sage -f matplotlib
+
+This doesn't work on OS X because in addition to TkAgg, Sage will try to
+compile the native Mac backend, which fails since Sage doesn't include
+an Objective-C compiler.  For OS X, download the source tarball for
+matplotlib, and then do
+
+  cd matplotlib-*
+  sage -sh echo '[gui_support]' >> setup.cfg
+  echo 'macosx=false' >> setup.cfg
+  python setup.py install
+
+Alternatively use the patched spkg (which has a modified 
+make-setup-config.py file at the top leve ) available at  http://dunfield.info/temp/matplotlib-1.2.1.spkg
 """
 
 # Load Tkinter
