@@ -105,7 +105,7 @@ class SL2RLifter:
                     fillings=[(128,0)])
                 try:
                     if rho.polished_holonomy().check_representation() < 1.0e-100:
-                        reps.append( rho )
+                        reps.append( (sn, rho) )
                 except:
                     pass
             if len(reps) > 1: 
@@ -113,16 +113,17 @@ class SL2RLifter:
 
     def find_translation_arcs(self):
         self.translation_arcs = []
+        self.translation_dict = {}
         for arc in self.SL2R_rep_arcs:
             #print len(arc)
             translations = []
-            for rho in arc:
+            for sn, rho in arc:
                 meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
                 rho_til = lift_on_cusped_manifold(rho)
-                translations.append(
-                    ( float(translation_amount(rho_til(meridian))),
-                      float(translation_amount(rho_til(longitude))) )
-                )
+                P = ( float(translation_amount(rho_til(meridian))),
+                        float(translation_amount(rho_til(longitude))) )
+                translations.append(P)
+                self.translation_dict[sn] = P
             self.translation_arcs.append(translations)
 
     def show(self):
@@ -143,3 +144,14 @@ class SL2RLifter:
                     slopes.append(None)
             plotlist.append(slopes)
         plot = Plot(plotlist)
+
+def lifted_slope(M, shapes, target_meridian_holonomy):
+    rho = PSL2RRepOf3ManifoldGroup(M, log(target_meridian_holonomy),
+                                   shapes, precision=1000,
+                                   fundamental_group_args = [True, False, True])
+    assert rho.polished_holonomy().check_representation() < 1.0e-100
+    meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+    rho_til = lift_on_cusped_manifold(rho)
+    return ( -translation_amount(rho_til(longitude)) /
+             translation_amount(rho_til(meridian)) )
+

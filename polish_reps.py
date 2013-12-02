@@ -1,6 +1,7 @@
 from sage.all import *
 import sys, os, re, tempfile, random, string
 import snappy, snappy.snap, euler
+from shapes import polished_tetrahedra_shapes
 
 def random_word(letters, N):
     return ''.join( [random.choice(letters) for i in range(N)] )
@@ -53,19 +54,17 @@ class PSL2CRepOf3ManifoldGroup:
     """
     Throughout precision is in bits.
     """
-    def __init__(self, manifold,
+    def __init__(self, manifold, target_meridian_log_holonomy,
                  rough_shapes=None,
                  precision=100,
-                 fundamental_group_args=tuple(),
-                 fillings=None):
+                 fundamental_group_args=tuple() ):
         self.precision = precision
         self.manifold, self.rough_shapes = manifold.copy(), rough_shapes
+        self.target_meridian_log_holonomy = target_meridian_log_holonomy
         self.fundamental_group_args = fundamental_group_args
         self._cache = {}
-        if fillings == None:
-            fillings = manifold.cusp_info('filling')
         if rough_shapes != None:
-            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes, fillings) 
+            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes) 
 
     def __repr__(self):
         return "<%s" % self.manifold + ": [" + ",".join(["%s" % z for z in self.rough_shapes]) + "]>"
@@ -73,7 +72,6 @@ class PSL2CRepOf3ManifoldGroup:
     def _update_precision(self, precision):
         if precision != None:
             self.precision = precision
-            
         
     def polished_holonomy(self, precision=None):
         self._update_precision(precision)
@@ -83,7 +81,8 @@ class PSL2CRepOf3ManifoldGroup:
             if precision == None:
                 G = self.manifold.fundamental_group(*self.fundamental_group_args)
             else:
-                G = snappy.snap.polished_holonomy(self.manifold, bits_prec=precision,
+                G = XXXpolished_holonomy(self.manifold, self.target_meridian_log_holonomy,
+                                         bits_prec=precision,
                                         fundamental_group_args=self.fundamental_group_args,
                                         lift_to_SL2=False, ignore_solution_type=True)
                 if not G.check_representation() < RR(2.0)**(-0.8*precision):
@@ -264,15 +263,15 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
     raise ValueError("Couldn't conjugate into PSL(2, R)")
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
-    def __init__(self, rep_or_manifold, rough_shapes=None,
-                 precision=None, fundamental_group_args=tuple(),
-                 fillings=None):
-        if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
-            rep = rep_or_manifold
-        else:
-            rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, rough_shapes,
-                                           precision, fundamental_group_args, fillings)
-
+    def __init__(self, rep_or_manifold, target_meridian_log_holonomy=None,
+                 rough_shapes=None,
+                 precision=None, fundamental_group_args=tuple()):
+#        if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
+        rep = rep_or_manifold
+        self.target_meridian_log_holonomy = rep.target_meridian_log_holonomy
+#        else:
+#           rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, target_meridian_log_holonomy,
+#                                           rough_shapes, precision, fundamental_group_args)
         self.manifold, self.rough_shapes, self.precision = rep.manifold, rep.rough_shapes, rep.precision
         self.fundamental_group_args = rep.fundamental_group_args
         self._cache = {}
@@ -282,14 +281,14 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         precision = self.precision
         if precision == None:
             raise ValueError, "Need to have a nontrivial precision set"
-
         mangled = "polished_holonomy_%s" % precision
         if not self._cache.has_key(mangled):
             epsilon = RR(2.0)**(-0.8*precision)
-            G = snappy.snap.polished_holonomy(self.manifold, precision,
-                                    fundamental_group_args=self.fundamental_group_args,
-                                    lift_to_SL2=False, ignore_solution_type=True)
-
+            G = XXXpolished_holonomy(self.manifold, self.target_meridian_log_holonomy,
+                                     precision,
+                                     fundamental_group_args=self.fundamental_group_args,
+                                     lift_to_SL2=False,
+                                     ignore_solution_type=True)
             new_mats = conjugate_into_PSL2R(G, epsilon)
             def rho(word):
                 return apply_representation(word, new_mats)
@@ -339,3 +338,52 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         shapes = "[" + ",".join(["%s" % z for z in self.rough_shapes]) + "]"
         traces = "[" + ",".join(["%s" % z for z in self.trace_field_generators()]) + "]"
         return "<%s" % self.manifold + ": " + traces + ">"
+
+
+from snappy.snap import  generators
+from snappy.snap.polished_reps import (initial_tet_ideal_vertices,
+                                       reconstruct_representation,
+                                       clean_matrix,
+                                       ManifoldGroup)
+
+def XXXpolished_holonomy(M, target_meridian_log_holonomy,
+                         bits_prec=100,
+                         fundamental_group_args = [],
+                         lift_to_SL2 = True,
+                         ignore_solution_type=False,
+                         dec_prec=None):
+    if dec_prec:
+        bits_prec = None
+        error = ZZ(10)**(-dec_prec*0.8)
+    else:
+        error = ZZ(2)**(-bits_prec*0.8)
+    shapes = polished_tetrahedra_shapes(M, target_meridian_log_holonomy, bits_prec=bits_prec, dec_prec=dec_prec)
+    G = M.fundamental_group(*fundamental_group_args)
+    N = generators.SnapPy_to_Mcomplex(M, shapes)
+    init_tet_vertices = initial_tet_ideal_vertices(N)
+    generators.visit_tetrahedra(N, init_tet_vertices)
+    mats = generators.compute_matrices(N)
+    gen_mats = [clean_matrix(A, error=error) for A in reconstruct_representation(G, mats)]
+    PG = ManifoldGroup(G.generators(), G.relators(), G.peripheral_curves(), gen_mats)
+    if lift_to_SL2:
+        PG.lift_to_SL2C()
+    else:
+        assert PG.is_projective_representation()
+
+    return PG
+
+import euler
+
+def lift_on_cusped_manifold(rho):
+    rels = rho.relators()[:-1]
+    euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
+    D = rho.coboundary_1_matrix()[:-1]
+    M = matrix(ZZ, [euler_cocycle] + D.columns())
+    k = M.left_kernel().basis()[0]
+    assert k[0] == 1
+    shifts = (-k)[1:]
+    good_lifts = [euler.PSL2RtildeElement(rho(g), s)
+                  for g, s in zip(rho.generators(), shifts)]
+    rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
+    return rho_til
+
