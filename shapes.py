@@ -14,7 +14,7 @@ def sage_complex_to_pari(z, dec_prec):
     return pari.complex( float_to_pari(z.real(), dec_prec), float_to_pari(z.imag(), dec_prec) )
 
 
-def polished_tetrahedra_shapes(manifold, target_meridian_log_holonomy,
+def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
                                dec_prec=None, bits_prec=200, ignore_solution_type=False):
     """
     Refines the current solution to the gluing equations to one with
@@ -45,9 +45,10 @@ def polished_tetrahedra_shapes(manifold, target_meridian_log_holonomy,
     manifold.dehn_fill( (1, 0) ) 
     init_equations = manifold.gluing_equations('rect')
 
-    
-
-    target = sage_complex_to_pari(exp(target_meridian_log_holonomy), working_prec)
+    CC = ComplexField(bits_prec)
+    arg_high_precision = CC(target_meridian_holonomy_arg)*CC.gen()
+    target = sage_complex_to_pari(arg_high_precision.exp(), working_prec)
+    print target, target.precision()
     
     if gluing_equation_error(init_equations, init_shapes, target) > pari(0.000001):
         raise ValueError('Initial solution not very good')

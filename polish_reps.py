@@ -38,6 +38,9 @@ def conjugacy_classes_in_Fn(gens, n):
 def SL2C_inverse(A):
     return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
+def GL2C_inverse(A):
+    return (1/det(A))*matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
+
 def apply_representation(word, gen_images):
     gens = string.ascii_lowercase[:len(gen_images)]
     rho = dict([(g, gen_images[i]) for i, g in enumerate(gens)] +
@@ -54,13 +57,13 @@ class PSL2CRepOf3ManifoldGroup:
     """
     Throughout precision is in bits.
     """
-    def __init__(self, manifold, target_meridian_log_holonomy,
+    def __init__(self, manifold, target_meridian_holonomy_arg,
                  rough_shapes=None,
                  precision=100,
                  fundamental_group_args=tuple() ):
         self.precision = precision
         self.manifold, self.rough_shapes = manifold.copy(), rough_shapes
-        self.target_meridian_log_holonomy = target_meridian_log_holonomy
+        self.target_meridian_holonomy_arg = target_meridian_holonomy_arg
         self.fundamental_group_args = fundamental_group_args
         self._cache = {}
         if rough_shapes != None:
@@ -81,7 +84,7 @@ class PSL2CRepOf3ManifoldGroup:
             if precision == None:
                 G = self.manifold.fundamental_group(*self.fundamental_group_args)
             else:
-                G = XXXpolished_holonomy(self.manifold, self.target_meridian_log_holonomy,
+                G = XXXpolished_holonomy(self.manifold, self.target_meridian_holonomy_arg,
                                          bits_prec=precision,
                                         fundamental_group_args=self.fundamental_group_args,
                                         lift_to_SL2=False, ignore_solution_type=True)
@@ -240,7 +243,7 @@ def conjugator_into_PSL2R(A, B):
     PSL(2, R) itself.
     """
     C = eigenbasis(A, B)
-    AA = (C**-1*A*C)
+    AA = GL2C_inverse(C)*A*C
     return C * matrix(A.base_ring(), [[1, 0], [0, 1/AA[0,1]]])
 
 def conjugate_into_PSL2R(rho, max_error, depth=5):
@@ -255,20 +258,20 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
             conjugates = [ rho(g)*U*rho(g.upper()) for g in gens ]
             V = max(conjugates, key=lambda M: (U - M).norm())
             C =  conjugator_into_PSL2R(U, V)
-            new_mats = [(C**-1) * rho(g) * C for g in gens]
-            new_mats, error = real_part_of_matricies_with_error(new_mats)
+            new_mats = [GL2C_inverse(C) * rho(g) * C for g in gens]
+            final_mats, error = real_part_of_matricies_with_error(new_mats)
             assert error < max_error
-            return new_mats
+            return final_mats
 
     raise ValueError("Couldn't conjugate into PSL(2, R)")
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
-    def __init__(self, rep_or_manifold, target_meridian_log_holonomy=None,
+    def __init__(self, rep_or_manifold, target_meridian_holonomy_arg=None,
                  rough_shapes=None,
                  precision=None, fundamental_group_args=tuple()):
 #        if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
         rep = rep_or_manifold
-        self.target_meridian_log_holonomy = rep.target_meridian_log_holonomy
+        self.target_meridian_holonomy_arg = rep.target_meridian_holonomy_arg
 #        else:
 #           rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, target_meridian_log_holonomy,
 #                                           rough_shapes, precision, fundamental_group_args)
@@ -284,7 +287,7 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         mangled = "polished_holonomy_%s" % precision
         if not self._cache.has_key(mangled):
             epsilon = RR(2.0)**(-0.8*precision)
-            G = XXXpolished_holonomy(self.manifold, self.target_meridian_log_holonomy,
+            G = XXXpolished_holonomy(self.manifold, self.target_meridian_holonomy_arg,
                                      precision,
                                      fundamental_group_args=self.fundamental_group_args,
                                      lift_to_SL2=False,
@@ -346,7 +349,7 @@ from snappy.snap.polished_reps import (initial_tet_ideal_vertices,
                                        clean_matrix,
                                        ManifoldGroup)
 
-def XXXpolished_holonomy(M, target_meridian_log_holonomy,
+def XXXpolished_holonomy(M, target_meridian_holonomy_args,
                          bits_prec=100,
                          fundamental_group_args = [],
                          lift_to_SL2 = True,
@@ -357,7 +360,7 @@ def XXXpolished_holonomy(M, target_meridian_log_holonomy,
         error = ZZ(10)**(-dec_prec*0.8)
     else:
         error = ZZ(2)**(-bits_prec*0.8)
-    shapes = polished_tetrahedra_shapes(M, target_meridian_log_holonomy, bits_prec=bits_prec, dec_prec=dec_prec)
+    shapes = polished_tetrahedra_shapes(M, target_meridian_holonomy_args, bits_prec=bits_prec, dec_prec=dec_prec)
     G = M.fundamental_group(*fundamental_group_args)
     N = generators.SnapPy_to_Mcomplex(M, shapes)
     init_tet_vertices = initial_tet_ideal_vertices(N)
