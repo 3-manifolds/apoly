@@ -152,6 +152,7 @@ class MatplotPlot(Plot):
         axis = self.figure.axis
         axis.clear()
         for i, data in enumerate(self.data):
+            data = [d for d in data if not d is None]
             if self.funcs_to_show[i].get():
                 if self.type == 'complex':
                     X, Y = [d.real for d in data], [d.imag for d in data]
