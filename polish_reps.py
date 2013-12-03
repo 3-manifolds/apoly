@@ -58,21 +58,21 @@ class PSL2CRepOf3ManifoldGroup:
     Throughout precision is in bits.
     """
     def __init__(self, manifold,
-                 target_meridian_holonomy_arg = None,
+                 target_meridian_holonomy_arg=None,
                  rough_shapes=None,
                  precision=100,
                  fundamental_group_args=tuple() ):
         self.precision = precision
         self.manifold, self.rough_shapes = manifold.copy(), rough_shapes
+        if rough_shapes != None:
+            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes) 
         if target_meridian_holonomy_arg is None:
-            RR = RealField()
-            target_meridian_holonomy_arg = RR(
-                manifold.cusp_info('holonomies')[0][0].imag) 
+            CC = ComplexField()
+            holonomy = CC(complex(manifold.cusp_info('holonomies')[0][0]))
+            target_meridian_holonomy_arg = holonomy.imag()
         self.target_meridian_holonomy_arg = target_meridian_holonomy_arg
         self.fundamental_group_args = fundamental_group_args
         self._cache = {}
-        if rough_shapes != None:
-            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes) 
 
     def __repr__(self):
         return "<%s" % self.manifold + ": [" + ",".join(["%s" % z for z in self.rough_shapes]) + "]>"
