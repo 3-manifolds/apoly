@@ -57,7 +57,8 @@ class PSL2CRepOf3ManifoldGroup:
     """
     Throughout precision is in bits.
     """
-    def __init__(self, manifold, target_meridian_holonomy_arg,
+    def __init__(self, manifold,
+                 target_meridian_holonomy_arg,
                  rough_shapes=None,
                  precision=100,
                  fundamental_group_args=tuple() ):
@@ -84,10 +85,11 @@ class PSL2CRepOf3ManifoldGroup:
             if precision == None:
                 G = self.manifold.fundamental_group(*self.fundamental_group_args)
             else:
-                G = XXXpolished_holonomy(self.manifold, self.target_meridian_holonomy_arg,
+                G = XXXpolished_holonomy(self.manifold,
+                                         self.target_meridian_holonomy_arg,
                                          bits_prec=precision,
-                                        fundamental_group_args=self.fundamental_group_args,
-                                        lift_to_SL2=False, ignore_solution_type=True)
+                                         fundamental_group_args=self.fundamental_group_args,
+                                         lift_to_SL2=False, ignore_solution_type=True)
                 if not G.check_representation() < RR(2.0)**(-0.8*precision):
                     raise CheckRepresentationFailed
 
@@ -269,13 +271,18 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
     def __init__(self, rep_or_manifold, target_meridian_holonomy_arg=None,
                  rough_shapes=None,
                  precision=None, fundamental_group_args=tuple()):
-#        if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
-        rep = rep_or_manifold
+        if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
+            rep = rep_or_manifold
+        else:
+           rep = PSL2CRepOf3ManifoldGroup(
+               rep_or_manifold, target_meridian_holonomy_arg,
+               rough_shapes,
+               precision,
+               fundamental_group_args)
+        self.manifold = rep.manifold
         self.target_meridian_holonomy_arg = rep.target_meridian_holonomy_arg
-#        else:
-#           rep = PSL2CRepOf3ManifoldGroup(rep_or_manifold, target_meridian_log_holonomy,
-#                                           rough_shapes, precision, fundamental_group_args)
-        self.manifold, self.rough_shapes, self.precision = rep.manifold, rep.rough_shapes, rep.precision
+        self.rough_shapes =  rep.rough_shapes
+        self.precision = rep.precision
         self.fundamental_group_args = rep.fundamental_group_args
         self._cache = {}
 
@@ -349,7 +356,7 @@ from snappy.snap.polished_reps import (initial_tet_ideal_vertices,
                                        clean_matrix,
                                        ManifoldGroup)
 
-def XXXpolished_holonomy(M, target_meridian_holonomy_args,
+def XXXpolished_holonomy(M, target_meridian_holonomy_arg,
                          bits_prec=100,
                          fundamental_group_args = [],
                          lift_to_SL2 = True,
@@ -360,7 +367,7 @@ def XXXpolished_holonomy(M, target_meridian_holonomy_args,
         error = ZZ(10)**(-dec_prec*0.8)
     else:
         error = ZZ(2)**(-bits_prec*0.8)
-    shapes = polished_tetrahedra_shapes(M, target_meridian_holonomy_args, bits_prec=bits_prec, dec_prec=dec_prec)
+    shapes = polished_tetrahedra_shapes(M, target_meridian_holonomy_arg, bits_prec=bits_prec, dec_prec=dec_prec)
     G = M.fundamental_group(*fundamental_group_args)
     N = generators.SnapPy_to_Mcomplex(M, shapes)
     init_tet_vertices = initial_tet_ideal_vertices(N)

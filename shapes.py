@@ -48,7 +48,6 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
     CC = ComplexField(bits_prec)
     arg_high_precision = CC(target_meridian_holonomy_arg)*CC.gen()
     target = sage_complex_to_pari(arg_high_precision.exp(), working_prec)
-    print target, target.precision()
     
     if gluing_equation_error(init_equations, init_shapes, target) > pari(0.000001):
         raise ValueError('Initial solution not very good')
