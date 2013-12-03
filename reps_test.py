@@ -30,9 +30,9 @@ def sample_rep(index, precision):
 def sample_rep_with_peripheral_renormalization(index, precision):
     name, shapes = sample_data[index]
     M = snappy.Manifold(name)
-#    M.set_peripheral_curves('fillings')
+    M.set_peripheral_curves('fillings')
     return PSL2RRepOf3ManifoldGroup(M, 
-                                    target_meridian_holonomy_arg=None, 
+                                    target_meridian_holonomy_arg=0.0, 
                                     rough_shapes=shapes,
                                     precision=precision,
                                     fundamental_group_args=[True, False, True])
@@ -105,17 +105,17 @@ def current_test():
         print "   new meridian: ", rho_til(meridian)
         print "   new longitude: ", rho_til(longitude)
 
-        rho =  sample_rep(i, 1000)
-        meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
-        if abs(rho(meridian).trace()) <= 2 and abs(rho(longitude).trace()) <=2:
-            p, q = map(int, rho.manifold.cusp_info(0).filling)
-            rho_til = lift_on_cusped_manifold(rho)
-            m_shift = translation_amount(rho_til(meridian))
-            l_shift = translation_amount(rho_til(longitude))
-            combo = p*m_shift + q*l_shift
-            print "   old meridian trans: ", RDF(m_shift)
-            print "   old longitude trans: ", RDF(l_shift)
-            print "   shift of filling curve: ", RDF(combo)
+        # rho =  sample_rep(i, 1000)
+        # meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+        # if abs(rho(meridian).trace()) <= 2 and abs(rho(longitude).trace()) <=2:
+        #     p, q = map(int, rho.manifold.cusp_info(0).filling)
+        #     rho_til = lift_on_cusped_manifold(rho)
+        #     m_shift = translation_amount(rho_til(meridian))
+        #     l_shift = translation_amount(rho_til(longitude))
+        #     combo = p*m_shift + q*l_shift
+        #     print "   old meridian trans: ", RDF(m_shift)
+        #     print "   old longitude trans: ", RDF(l_shift)
+        #     print "   shift of filling curve: ", RDF(combo)
         print "\n"
 
 
