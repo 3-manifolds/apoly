@@ -58,12 +58,16 @@ class PSL2CRepOf3ManifoldGroup:
     Throughout precision is in bits.
     """
     def __init__(self, manifold,
-                 target_meridian_holonomy_arg,
+                 target_meridian_holonomy_arg = None,
                  rough_shapes=None,
                  precision=100,
                  fundamental_group_args=tuple() ):
         self.precision = precision
         self.manifold, self.rough_shapes = manifold.copy(), rough_shapes
+        if target_meridian_holonomy_arg is None:
+            RR = RealField()
+            target_meridian_holonomy_arg = RR(
+                manifold.cusp_info('holonomies')[0][0].imag) 
         self.target_meridian_holonomy_arg = target_meridian_holonomy_arg
         self.fundamental_group_args = fundamental_group_args
         self._cache = {}
@@ -268,14 +272,17 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
     raise ValueError("Couldn't conjugate into PSL(2, R)")
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
-    def __init__(self, rep_or_manifold, target_meridian_holonomy_arg=None,
+    def __init__(self, rep_or_manifold,
+                 target_meridian_holonomy_arg=None,
                  rough_shapes=None,
-                 precision=None, fundamental_group_args=tuple()):
+                 precision=None,
+                 fundamental_group_args=tuple()):
         if isinstance(rep_or_manifold, PSL2CRepOf3ManifoldGroup):
             rep = rep_or_manifold
         else:
            rep = PSL2CRepOf3ManifoldGroup(
-               rep_or_manifold, target_meridian_holonomy_arg,
+               rep_or_manifold,
+               target_meridian_holonomy_arg,
                rough_shapes,
                precision,
                fundamental_group_args)
