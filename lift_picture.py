@@ -60,17 +60,6 @@ def in_SL2R(H, f, s):
         return False
     return True
 
-def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
-    RR = RealField()
-    target = RR(target_meridian_holonomy_arg)
-    rho = PSL2CRepOf3ManifoldGroup(M, target, rough_shapes=shapes, precision=1000)
-    assert rho.polished_holonomy().check_representation() < 1.0e-100
-    rho_real = PSL2RRepOf3ManifoldGroup(rho)
-    meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
-    rho_tilde = lift_on_cusped_manifold(rho_real)
-    return ( -translation_amount(rho_tilde(longitude)) /
-             translation_amount(rho_tilde(meridian)) )
-
 class SL2RLifter:
     def __init__(self, V):
         self.holonomizer = H = V.holonomizer
@@ -161,4 +150,49 @@ class SL2RLifter:
             plotlist.append(slopes)
         plot = Plot(plotlist)
 
+def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
+    RR = RealField()
+    target = RR(target_meridian_holonomy_arg)
+    rho = PSL2CRepOf3ManifoldGroup(M, target, rough_shapes=shapes, precision=1000)
+    assert rho.polished_holonomy().check_representation() < 1.0e-100
+    rho_real = PSL2RRepOf3ManifoldGroup(rho)
+    meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+    rho_tilde = lift_on_cusped_manifold(rho_real)
+    return ( -translation_amount(rho_tilde(longitude)) /
+             translation_amount(rho_tilde(meridian)) )
 
+def check_slope(H, n, s):
+    F = H.T_fibers[n]
+    S = F.shapes[s]
+    M = H.manifold.copy()
+    target = log(F.H_meridian).imag()
+    return float(lifted_slope(M, target, S))
+
+def bisection(H, low, high, s, target_slope, epsilon=1.0e-8):
+    CC = ComplexField()
+    low_fiber = H.T_fibers[low]
+    high_fiber = H.T_fibers[high]
+    M = H.manifold
+    F = H.fibrator
+    assert check_slope(H,low,s) < target_slope < check_slope(H,high,s)
+    print 'finding:', target_slope
+    count = 0
+    while count < 100:
+        z = (low_fiber.H_meridian + high_fiber.H_meridian)/2
+        target_holonomy = z/abs(z)
+        target_holonomy_arg = CC(target_holonomy).log().imag()
+        new_fiber = F.transport2(low_fiber, complex(target_holonomy))
+        shapes = new_fiber.shapes[s]
+        new_slope = lifted_slope(M, target_holonomy_arg, shapes)
+        if abs(new_slope - target_slope) < epsilon:
+            return new_fiber.shapes[s]
+        if new_slope < target_slope:
+            low_fiber = new_fiber
+            print new_slope, 'too low'
+        else:
+            high_fiber = new_fiber
+            print new_slope, 'too high'
+        count += 1
+        print count
+    print 'limit exceeded'
+    return new_fiber.shapes[s]

@@ -30,10 +30,13 @@ def sample_rep(index, precision):
 def sample_rep_with_peripheral_renormalization(index, precision):
     name, shapes = sample_data[index]
     M = snappy.Manifold(name)
-    M.set_peripheral_curves('fillings')
-    return PSL2RRepOf3ManifoldGroup(M, shapes, precision, [True, False, True])
-    
-
+#    M.set_peripheral_curves('fillings')
+    return PSL2RRepOf3ManifoldGroup(M, 
+                                    target_meridian_holonomy_arg=None, 
+                                    rough_shapes=shapes,
+                                    precision=precision,
+                                    fundamental_group_args=[True, False, True])
+ 
 def basic_test():
     for i in range(len(sample_data)):
         rho = sample_rep(i, 1000)
@@ -42,9 +45,11 @@ def basic_test():
         
 
 def lift_on_cusped_manifold(rho):
-    rels = rho.relators()[:-1]
+    #    rels = rho.relators()[:-1] # Since we no longer do the filling!
+    rels = rho.relators()
     euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
-    D = rho.coboundary_1_matrix()[:-1]
+    #    D = rho.coboundary_1_matrix()[:-1]
+    D = rho.coboundary_1_matrix()
     M = matrix(ZZ, [euler_cocycle] + D.columns())
     k = M.left_kernel().basis()[0]
     assert k[0] == 1
