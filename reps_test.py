@@ -45,11 +45,9 @@ def basic_test():
         
 
 def lift_on_cusped_manifold(rho):
-    #    rels = rho.relators()[:-1] # Since we no longer do the filling!
-    rels = rho.relators()
+    rels = rho.relators()[:-1] 
     euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
-    #    D = rho.coboundary_1_matrix()[:-1]
-    D = rho.coboundary_1_matrix()
+    D = rho.coboundary_1_matrix()[:-1]
     M = matrix(ZZ, [euler_cocycle] + D.columns())
     k = M.left_kernel().basis()[0]
     assert k[0] == 1
