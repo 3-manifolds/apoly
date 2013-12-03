@@ -3,9 +3,11 @@ from polish_reps import *
 from euler import *
 
 def lift_on_cusped_manifold(rho):
-    rels = rho.relators()[:-1]
+#???    rels = rho.relators()[:-1]
+    rels = rho.relators()
     euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
-    D = rho.coboundary_1_matrix()[:-1]
+#???    D = rho.coboundary_1_matrix()[:-1]
+    D = rho.coboundary_1_matrix()
     M = matrix(ZZ, [euler_cocycle] + D.columns())
     k = M.left_kernel().basis()[0]
     assert k[0] == 1
@@ -16,7 +18,7 @@ def lift_on_cusped_manifold(rho):
     return rho_til
 
 def elliptic_fixed_point(A):
-    assert abs(A.trace()) <= 2
+    assert abs(A.trace()) < 2.0
     R = A.base_ring()
     C = R.complex_field()
     x = PolynomialRing(R, 'x').gen()
@@ -58,6 +60,17 @@ def in_SL2R(H, f, s):
         return False
     return True
 
+def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
+    RR = RealField()
+    target = RR(target_meridian_holonomy_arg)
+    rho = PSL2CRepOf3ManifoldGroup(M, target, rough_shapes=shapes, precision=1000)
+    assert rho.polished_holonomy().check_representation() < 1.0e-100
+    rho_real = PSL2RRepOf3ManifoldGroup(rho)
+    meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
+    rho_tilde = lift_on_cusped_manifold(rho_real)
+    return ( -translation_amount(rho_tilde(longitude)) /
+             translation_amount(rho_tilde(meridian)) )
+
 class SL2RLifter:
     def __init__(self, V):
         self.holonomizer = H = V.holonomizer
@@ -93,21 +106,21 @@ class SL2RLifter:
 
     def find_reps(self):
         self.SL2R_rep_arcs = []
+        RR = RealField(1000)
         for arc in self.SL2R_arcs:
             reps = []
             for sn,  S in arc:
-                #print sn
+                s, n = sn
+                target1 = log(self.holonomizer.T_fibers[n].H_meridian).imag()
+                target = -2*RR(pi)*RR(n)/RR(128)
                 rho = PSL2RRepOf3ManifoldGroup(
                     self.holonomizer.manifold,
+                    target,
                     S,
                     precision=1000,
-                    fundamental_group_args = [True, False, True],
-                    fillings=[(128,0)])
-                try:
-                    if rho.polished_holonomy().check_representation() < 1.0e-100:
-                        reps.append( (sn, rho) )
-                except:
-                    pass
+                    fundamental_group_args = [True, False, True])
+                if rho.polished_holonomy().check_representation() < 1.0e-100:
+                    reps.append( (sn, rho) )
             if len(reps) > 1: 
                 self.SL2R_rep_arcs.append(reps)
 
@@ -120,10 +133,13 @@ class SL2RLifter:
             for sn, rho in arc:
                 meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
                 rho_til = lift_on_cusped_manifold(rho)
-                P = ( float(translation_amount(rho_til(meridian))),
-                        float(translation_amount(rho_til(longitude))) )
-                translations.append(P)
-                self.translation_dict[sn] = P
+                try:
+                    P = ( float(translation_amount(rho_til(meridian))),
+                          float(translation_amount(rho_til(longitude))) )
+                    translations.append(P)
+                    self.translation_dict[sn] = P
+                except AssertionError:
+                    pass
             self.translation_arcs.append(translations)
 
     def show(self):
@@ -145,13 +161,4 @@ class SL2RLifter:
             plotlist.append(slopes)
         plot = Plot(plotlist)
 
-def lifted_slope(M, shapes, target_meridian_holonomy):
-    rho = PSL2RRepOf3ManifoldGroup(M, log(target_meridian_holonomy),
-                                   shapes, precision=1000,
-                                   fundamental_group_args = [True, False, True])
-    assert rho.polished_holonomy().check_representation() < 1.0e-100
-    meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
-    rho_til = lift_on_cusped_manifold(rho)
-    return ( -translation_amount(rho_til(longitude)) /
-             translation_amount(rho_til(meridian)) )
 
