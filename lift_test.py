@@ -6,6 +6,8 @@ import bz2
 from apoly import *
 from lift_picture import *
 from lspace_slopes import compute_L_space_range as Lcone
+from lspace_data import longitudes
+
 
 
 def draw_line(L, curve_on_torus, **kwargs):
@@ -26,6 +28,10 @@ def cone(L, C):
     draw_line(L, u, color='black')
     draw_line(L, v, color='black')
     draw_line(L, u + v, color='red')
+    draw_line(L, 2*u + v, color='red')
+    draw_line(L, 3*u + v, color='red')
+    draw_line(L, u + 2*v, color='red')
+    draw_line(L, u + 3*v, color='red')
     L.plot.figure.draw()
 
 def make_lifter(name):
@@ -55,3 +61,11 @@ def plot_data(name):
     C = Lcone(name)
     cone(L, Lcone(name))
     return P, L
+
+
+def quick_draw(name):
+    L = load_data(name)
+    L.show()
+    cone(L, Lcone(name))
+    draw_line(L, longitudes[name], color='green')
+    return L

@@ -118,10 +118,11 @@ class SagePlot(Plot):
 class MatplotPlot(Plot):
     #def __init__(self, data, **kwargs):
     #    Plot.__init__(self, data, **kwargs)
-        
+         
     def start_plotter(self):
         from tkplot import MatplotFigure, Tk, ttk
-        self.figure = MF = MatplotFigure()
+        self.figure = MF = MatplotFigure(add_subplot=False)
+        MF.axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
         n = len(self.data)
         self.funcs_to_show = [Tk.BooleanVar(value=True) for i in range(n)]
         func_selector_frame = ttk.Frame(MF.window)
@@ -159,7 +160,15 @@ class MatplotPlot(Plot):
                 else:
                     X, Y = range(len(data)), data
                 axis.plot(X, Y, color=self.color(i), linewidth=self.linewidth, label='%d' % i)
-        axis.legend()
+
+        # Add whitespace and room for the legend
+        xa, xb = axis.get_xlim()
+        sx = (xb-xa)/12.0
+        axis.set_xlim(xa-sx, xb+sx)
+        ya, yb = axis.get_ylim()
+        sy = (yb-ya)/12.0
+        axis.set_ylim(ya-sy, yb+sy)
+        legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
         self.figure.draw()
 
     def show_plots(self):
