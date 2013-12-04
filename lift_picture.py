@@ -1,34 +1,6 @@
 from apoly import *
-from polish_reps import *
-from euler import *
-
-def lift_on_cusped_manifold(rho):
-#???    rels = rho.relators()[:-1]
-    rels = rho.relators()
-    euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
-#???    D = rho.coboundary_1_matrix()[:-1]
-    D = rho.coboundary_1_matrix()
-    print euler_cocycle
-    M = matrix(ZZ, [euler_cocycle] + D.columns())
-    k = M.left_kernel().basis()[0]
-    assert k[0] == 1
-    shifts = (-k)[1:]
-    good_lifts = [euler.PSL2RtildeElement(rho(g), s)
-                  for g, s in zip(rho.generators(), shifts)]
-    rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
-    return rho_til
-    
-def translation_amount(A_til):
-    return elliptic_rotation_angle(A_til.A) + A_til.s
-
-def rot(R, t, s):
-    t = R.pi()*R(t)
-    A = matrix(R, [[cos(t), -sin(t)], [sin(t), cos(t)]])
-    return euler.PSL2RtildeElement(A, s)
-
-def shift_of_central(A_til):
-    assert A_til.is_central()
-    return A_til.s
+from sage.all import *
+from real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
 
 def in_SL2R(H, f, s):
     shape = H.T_fibers[f].shapes[s]
@@ -100,7 +72,7 @@ class SL2RLifter:
             translations = []
             for sn, rho in arc:
                 meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
-                rho_til = lift_on_cusped_manifold(rho)
+                rho_til = rho.lift_on_cusped_manifold()
                 try:
                     P = ( float(translation_amount(rho_til(meridian))),
                           float(translation_amount(rho_til(longitude))) )

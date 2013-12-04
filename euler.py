@@ -18,7 +18,8 @@ that the RHS being cbar(g1, g2)
 
 
 """
-
+# Switching to the below causes crashes elsewhere. Weird.
+# from sage.all import matrix, vector, sqrt, arccos, floor, cos, sin
 from sage.all import *
 
 def swapped_dot(a, b):
