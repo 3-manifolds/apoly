@@ -1,6 +1,6 @@
 from sage.all import *
 from polish_reps import PSL2CRepOf3ManifoldGroup, polished_holonomy, apply_representation, GL2C_inverse, SL2C_inverse
-
+import euler
 
 def random_word(letters, N):
     return ''.join( [random.choice(letters) for i in range(N)] )
@@ -37,7 +37,7 @@ def conjugacy_classes_in_Fn(gens, n):
 def real_part_of_matrix_with_error(A):
     RR = RealField(A.base_ring().precision())
     entries = A.list()
-    real_parts, error = [x.real() for x in entries], max([abs(x.imag()) for x in entries])
+    real_parts, error = [clean_real(x.real()) for x in entries], max([abs(x.imag()) for x in entries])
     B = matrix(RR, real_parts, nrows=A.nrows(), ncols=A.ncols())
     if B.trace() < 0:
         B = -B
@@ -62,6 +62,15 @@ def orientation(a, b, c):
 def dist(a,b):
     return (a - b).norm()
 
+def clean_real(r):
+    RR = r.parent()
+    epsilon = RR(2)**(-0.5*RR.precision())
+    return RR(0) if abs(r) < epsilon else r
+
+def clean_matrix(M):
+    RR = M.base_ring()
+    return matrix(RR, 2, 2, [clean_matrix(x) for x in M.list()])
+    
 def right_kernel_two_by_two(A):
     """
     For a 2x2 matrix A over an approximate field like RR or CC find an
@@ -188,7 +197,6 @@ def normalizer_wrt_target_meridian_holonomy(meridian_matrix, target):
     
     
 
-import euler
 
     
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):

@@ -156,7 +156,7 @@ class PSL2RtildeElement:
     def base_ring(self):
         return self.A.base_ring()
 
-    def is_central(self, tol=0.5):
+    def is_central(self):
         return is_almost_identity(self.A)
 
 #RR = RealField(100)
