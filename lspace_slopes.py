@@ -1,5 +1,7 @@
+from sage.all import *
 from lspace_data import names, L_space_slopes, genus
 import snappy
+
 
 manifolds = [snappy.Manifold(name) for name in names]
 

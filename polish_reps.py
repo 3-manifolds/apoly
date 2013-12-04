@@ -138,6 +138,12 @@ class PSL2CRepOf3ManifoldGroup:
         G = self.polished_holonomy()
         return G.check_representation() < RR(2.0)**(-0.8*self.precision)
 
+    def peripheral_curves(self):
+        return self.manifold.fundamental_group().peripheral_curves()
+
+    def meridian(self):
+        return self.peripheral_curves()[0][0]
+    
     def generators(self):
         return self.polished_holonomy().generators()
 
@@ -234,13 +240,31 @@ def eigenvectors(A):
     CC = A.base_ring()
     return [right_kernel_two_by_two(A-eigval) for eigval in A.charpoly().roots(CC, False)]
     
+#def eigenbasis(A, B):
+#    """
+#    Given loxodromic matrices A and B, return a basis of C^2 consisting of
+#   one eigenvector from each. 
+#    """
+#    basis = [ (a, b) for a in eigenvectors(A) for b in eigenvectors(B) ]
+#    return matrix(min(basis, key=lambda (a,b) : abs(a*b))).transpose()
+
+def eigenvector(A):
+    """
+    Returns the eigenvector corresponding to the larger eigenvalue of a
+    loxodromic matrix A
+    """
+    CC = A.base_ring()
+    evalues =  A.charpoly().roots(CC, False)
+    evalue = max(evalues, key=abs)
+    return right_kernel_two_by_two(A-evalue)
+    
 def eigenbasis(A, B):
     """
     Given loxodromic matrices A and B, return a basis of C^2 consisting of
     one eigenvector from each. 
     """
-    basis = [ (a, b) for a in eigenvectors(A) for b in eigenvectors(B) ]
-    return matrix(min(basis, key=lambda (a,b) : abs(a*b))).transpose()
+    return matrix([eigenvector(A), eigenvector(B)]).transpose()
+
 
 def conjugator_into_PSL2R(A, B):
     """
@@ -270,6 +294,44 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
             return final_mats
 
     raise ValueError("Couldn't conjugate into PSL(2, R)")
+
+
+def elliptic_fixed_point(A):
+    assert abs(A.trace()) < 2.0
+    RR = A.base_ring()
+    CC = RR.complex_field()
+    x = PolynomialRing(RR, 'x').gen()
+    a, b, c, d = A.list()
+    p = c*x*x + (d - a)*x - b
+    if p == 0:
+        return CC.gen()
+    return max(p.roots(CC, False), key=lambda z:z.imag())
+
+def elliptic_rotation_angle(A):
+    z = elliptic_fixed_point(A)
+    
+    a, b, c, d = A.list()
+    derivative = 1/(c*z + d)**2
+    pi = A.base_ring().pi()
+    r = -derivative.argument()
+    if r < 0:
+        r = r + 2*pi
+    return r/(2*pi)
+
+def normalizer_wrt_target_meridian_holonomy(meridian_matrix, target):
+    current = elliptic_rotation_angle(meridian_matrix)
+    CC = current.parent()
+    target *= 1/(2*CC.pi())
+    target += -target.floor()
+    other = 1 - current
+    if abs(other - target) < abs(current - target):
+        I = CC.gen()
+        return matrix(CC, [[I, 0], [0, -I]])
+    else:
+        return matrix(CC, [[1, 0], [0, 1]])
+        
+    
+    
 
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
     def __init__(self, rep_or_manifold,
@@ -307,6 +369,13 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
                                      lift_to_SL2=False,
                                      ignore_solution_type=True)
             new_mats = conjugate_into_PSL2R(G, epsilon)
+            if self.target_meridian_holonomy_arg:
+                meridian_word = self.meridian()
+                meridian_matrix = apply_representation(meridian_word, new_mats)
+                C = normalizer_wrt_target_meridian_holonomy(meridian_matrix,
+                                                       self.target_meridian_holonomy_arg)
+                new_mats = real_part_of_matricies_with_error([SL2C_inverse(C)*M*C for M in new_mats])[0]
+            
             def rho(word):
                 return apply_representation(word, new_mats)
             G.SL2C = rho
