@@ -8,6 +8,7 @@ def lift_on_cusped_manifold(rho):
     euler_cocycle = [euler.euler_cocycle_of_relation(rho, R) for R in rels]
 #???    D = rho.coboundary_1_matrix()[:-1]
     D = rho.coboundary_1_matrix()
+    print euler_cocycle
     M = matrix(ZZ, [euler_cocycle] + D.columns())
     k = M.left_kernel().basis()[0]
     assert k[0] == 1
@@ -16,28 +17,6 @@ def lift_on_cusped_manifold(rho):
                   for g, s in zip(rho.generators(), shifts)]
     rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
     return rho_til
-
-def elliptic_fixed_point(A):
-    assert abs(A.trace()) < 2.0
-    R = A.base_ring()
-    C = R.complex_field()
-    x = PolynomialRing(R, 'x').gen()
-    a, b, c, d = A.list()
-    p = c*x*x + (d - a)*x - b
-    if p == 0:
-        return CC.gen()
-    return max(p.roots(CC, False), key=lambda z:z.imag())
-
-def elliptic_rotation_angle(A):
-    z = elliptic_fixed_point(A)
-    
-    a, b, c, d = A.list()
-    derivative = 1/(c*z + d)**2
-    pi = A.base_ring().pi()
-    r = -derivative.argument()
-    if r < 0:
-        r = r + 2*pi
-    return r/(2*pi)
     
 def translation_amount(A_til):
     return elliptic_rotation_angle(A_til.A) + A_til.s

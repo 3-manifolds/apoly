@@ -22,8 +22,8 @@ from random import random, randint
 from subprocess import Popen, PIPE
 import time, sys, os, Tkinter
 
-from plot import GnuplotPlot as Plot
-#from plot import MatplotPlot as Plot
+#from plot import GnuplotPlot as Plot
+from plot import MatplotPlot as Plot
 
 complex_array = numpy.vectorize(complex)
 
