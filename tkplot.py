@@ -47,7 +47,7 @@ class MatplotFigure:
         window = Tk.Tk() if root is None else Tk.Toplevel(root)
         figure_frame = ttk.Frame(window)
         canvas = FigureCanvasTkAgg(figure, master=figure_frame)
-        canvas._tkcanvas.config(highlightthickness=0, width=600, height=600)
+        canvas._tkcanvas.config(highlightthickness=0, width=1000, height=600)
         toolbar = NavigationToolbar2TkAgg(canvas, figure_frame)
         toolbar.pack(side=Tk.TOP, fill=Tk.X)
         canvas._tkcanvas.pack(side=Tk.TOP,  fill=Tk.BOTH, expand=1)
