@@ -66,10 +66,6 @@ def clean_real(r):
     RR = r.parent()
     epsilon = RR(2)**(-0.5*RR.precision())
     return RR(0) if abs(r) < epsilon else r
-
-def clean_matrix(M):
-    RR = M.base_ring()
-    return matrix(RR, 2, 2, [clean_matrix(x) for x in M.list()])
     
 def right_kernel_two_by_two(A):
     """
@@ -108,7 +104,7 @@ def eigenvector(A):
     CC = A.base_ring()
     evalues =  A.charpoly().roots(CC, False)
     evalue = max(evalues, key=abs)
-    return right_kernel_two_by_two(A-evalue)
+    return right_kernel_two_by_two(A - evalue)
     
 def eigenbasis(A, B):
     """
@@ -190,9 +186,10 @@ def normalizer_wrt_target_meridian_holonomy(meridian_matrix, target):
     other = 1 - current
     if abs(other - target) < abs(current - target):
         I = CC.gen()
-        return matrix(CC, [[I, 0], [0, -I]])
+        C =  matrix(CC, [[I, 0], [0, -I]])
     else:
-        return matrix(CC, [[1, 0], [0, 1]])
+        C = matrix(CC, [[1, 0], [0, 1]])
+    return C * matrix(CC, [[1, 1], [1, 2]])
         
     
     

@@ -31,6 +31,11 @@ def norm(v):
 def orientation(a, b, c):
     return cmp( swapped_dot(a,b) * swapped_dot(b,c) * swapped_dot(c, a), 0)
 
+def clean_real(r):
+    RR = r.parent()
+    epsilon = RR(2)**(-0.8*RR.precision())
+    return RR(0) if abs(r) < epsilon else r
+
 def SL2_inverse(A):
     return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
