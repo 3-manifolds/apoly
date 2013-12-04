@@ -48,12 +48,12 @@ def compute_L_space_range(name):
     L_slopes = [vector(s) for s in L_space_slopes[name]]
     K = snappy.CensusKnots.identify(M)
     A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
+    A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
     Ainv = A**(-1)
     L_slopes_in_K = [normalize(A*s) for s in L_slopes]
     s = 1 if min(s[1] for s in L_slopes_in_K) >= 0 else -1
     knot_meridian =  vector(ZZ, (1, 0))
     l_space_edge = vector(ZZ, (2*g - 1, s))
-
     C = Cone(Ainv*knot_meridian, Ainv*l_space_edge)
     assert {slope in C for slope in L_space_slopes[name]} == {True}
     return C

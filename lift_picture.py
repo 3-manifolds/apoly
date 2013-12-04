@@ -15,6 +15,7 @@ class SL2RLifter:
     def __init__(self, V):
         self.holonomizer = H = V.holonomizer
         self.degree = H.degree
+        self.manifold_name = V.manifold_name
         self.find_shapes()
         print 'lifting reps'
         self.find_reps()
@@ -76,6 +77,8 @@ class SL2RLifter:
                 try:
                     P = ( float(translation_amount(rho_til(meridian))),
                           float(translation_amount(rho_til(longitude))) )
+                    if P[0] < 0:
+                        P = (-P[0], -P[1])
                     translations.append(P)
                     self.translation_dict[sn] = P
                 except AssertionError:
@@ -84,7 +87,7 @@ class SL2RLifter:
 
     def show(self):
         plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs ]
-        plot = Plot(plotlist)
+        self.plot = Plot(plotlist)
 
     def show_slopes(self):
         M = self.holonomizer.manifold.copy()
@@ -99,7 +102,7 @@ class SL2RLifter:
                 elif len(slopes) > 1:
                     slopes.append(None)
             plotlist.append(slopes)
-        plot = Plot(plotlist)
+        self.slope_plot = Plot(plotlist)
 
 def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
     RR = RealField()
