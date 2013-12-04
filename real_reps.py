@@ -1,5 +1,5 @@
 from sage.all import *
-from polish_reps import PSL2CRepOf3ManifoldGroup, polished_holonomy, apply_representation, GL2C_inverse, SL2C_inverse
+from polish_reps import PSL2CRepOf3ManifoldGroup, polished_holonomy, apply_representation, GL2C_inverse, SL2C_inverse, CheckRepresentationFailed
 import euler
 
 def random_word(letters, N):
