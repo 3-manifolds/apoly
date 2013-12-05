@@ -38,7 +38,8 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 
 
 class MatplotFigure:
-    def __init__(self, add_subplot=True, root=None):
+    def __init__(self, add_subplot=True, root=None, **kwargs):
+        args = kwargs
         figure = matplotlib.figure.Figure(figsize=(6,6), dpi=100)
         figure.set_facecolor('white')
         axis = figure.add_subplot(111) if add_subplot else None
