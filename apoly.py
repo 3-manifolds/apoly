@@ -646,9 +646,9 @@ class Holonomizer:
         print 'Computing longitude holonomies and eigenvalues.'
         # This crashes if there are bad fibers.
         longitude_holonomies = [
-            [self.L_holo(f.shapes[n]()) for f in fiber_list
+            [( n, self.L_holo(f.shapes[m]()) ) for n, f in enumerate(fiber_list)
              if not isinstance(f, int)]
-            for n in xrange(self.degree)]
+            for m in xrange(self.degree)]
         # I tried choosing a random fiber here, and things broke badly.
         # find_shift would get the wrong shift.
 #        if index is None:
@@ -657,17 +657,18 @@ class Holonomizer:
 #        print 'starting index = %d'%index 
         longitude_traces = self.find_longitude_traces(fiber_list[index])
         longitude_eigenvalues = []
-        for n, L in enumerate(longitude_holonomies):
-            tr = longitude_traces[n]
-            e = sqrt(L[index])
-            E = [ e if abs(e + 1/e - tr) < abs(e + 1/e + tr) else -e ]
-            for holo in L[index+1:]:
+        for m, L in enumerate(longitude_holonomies):
+            tr = longitude_traces[m]
+            n, holo = L[index]
+            e = sqrt(holo)
+            E = [ (n,e) if abs(e + 1/e - tr) < abs(e + 1/e + tr) else (n,-e) ]
+            for n, holo in L[index+1:]:
                 e = sqrt(holo)
-                E.append(e if abs(e - E[-1]) < abs(e + E[-1]) else -e )
+                E.append( (n,e) if abs(e - E[-1][1]) < abs(e + E[-1][1]) else (n,-e) )
             if index > 0:
-                for holo in L[index-1::-1]:
+                for n, holo in L[index-1::-1]:
                     e = sqrt(holo)
-                    E.insert(0,e if abs(e - E[0]) < abs(e + E[0]) else -e )
+                    E.insert(0,(n,e) if abs(e - E[0][1]) < abs(e + E[0][1]) else (n,-e) )
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
 
@@ -868,7 +869,7 @@ class PECharVariety:
             arc = []
             info = []
             lastL = 0
-            for n, ev in enumerate(track):
+            for n, ev in track:
                 su2_ok = True
                 if su2_only:
                     try:
@@ -876,19 +877,19 @@ class PECharVariety:
                     except:
                         #For now, just throw it in so we can look at it.
                         su2_ok = True
-                if (0.9999 < abs(ev) < 1.0001) and su2_ok:
+                if (0.99999 < abs(ev) < 1.00001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
-                    if lastL - L > 0.5 and len(arc) > 0:
-                        arc.append(1.0+L + 1j*M_args[n])
-                        arc.append(None)
-                        arc.append(lastL-1.0 + 1j*M_args[n-1])
-                    elif L - lastL > 0.5 and len(arc) > 0:
-                        arc.append(L-1.0 + 1j*M_args[n])
-                        arc.append(None)
-                        arc.append(1.0+lastL + 1j*M_args[n-1])
-                    arc.append( L + 1j*(M_args[n]%1) )
+                    if len(arc)>1:
+                        if arc[-1].real > 0.9 and L < 0.1: #L became >1
+                            arc.append(1.0 + 1j*M_args[n-1])
+                            arc.append(None)
+                            arc.append(0.0 + 1j*M_args[n-1])
+                        elif arc[-1].real < 0.1 and L > 0.9: # L became > 1
+                            arc.append(0.0 + 1j*M_args[n-1])
+                            arc.append(None)
+                            arc.append(1.0 + 1j*M_args[n-1])
+                    arc.append( L + 1j*(M_args[n]) )
                     info.append( (m,n) )
-                    lastL = L
                 else:
                     if len(arc) > 1:
                         self.arcs.append(arc)
@@ -902,22 +903,22 @@ class PECharVariety:
         for arc in self.arcs:
             try:
                 if abs(arc[1] - arc[0]) > 0.25:
-                    if abs(arc[1].imag) < 0.05:
+                    if arc[0].imag > 0.45 and arc[1].imag  < 0.05 :
                         arc[0] = arc[0] - 0.5j
-                    elif abs(arc[1].imag) > 0.45:
+                    elif arc[0].imag < 0.05 and arc[1].imag > 0.45:
                         arc[0] = arc[0] + 0.5j
-                    if abs(arc[1].real) < 0.1:
+                    if arc[0].real > 0.9 and arc[1].real < 0.1:
                         arc[0] = arc[0] - 1.0
-                    elif abs(arc[1].real) > 0.9:
+                    elif arc[0].real < 0.1 and arc[1].real > 0.9:
                         arc[0] = arc[0] + 1.0
                 if abs(arc[-1] - arc[-2]) > 0.25:
-                    if abs(arc[-2].imag) < 0.05:
+                    if abs(arc[-2].imag) < 0.05 and arc[-1].imag > 0.45:
                         arc[-1] = arc[-1] - 0.5j
-                    elif abs(arc[-2].imag) > 0.45:
+                    elif arc[-2].imag > 0.45 and arc[-1].imag < 0.05:
                         arc[-1] = arc[-1] + 0.5j
-                    if abs(arc[-2].real) < 0.1:
+                    if arc[-2].real < 0.1 and arc[-1].real > 0.9:
                         arc[-1] = arc[-1] - 1.0
-                    elif abs(arc[-2].real ) > 0.9:
+                    elif arc[-2].real > 0.9 and arc[-1].real < 0.1:
                         arc[-1] = arc[-1] + 1.0
             except TypeError:
                 pass
@@ -925,7 +926,8 @@ class PECharVariety:
     def show(self, su2_only=False):
         self.build_arcs( su2_only)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
-        Plot(self.arcs, commands="""
+        Plot(self.arcs, limits=((0.0, 1.0), (0.0, 0.5)),
+             commands="""
                     set terminal %s title "%s" size 1400,700
                     set xrange [0.0:1.0]
                     set yrange[0.0:0.5]
@@ -1026,14 +1028,18 @@ class Apoly:
         if self.tighten:
             self.holonomizer.tighten(1.01)
             if self.gluing_form:
-                vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+                vals = [array([x for n,x in track])
+                        for track in self.holonomizer.R_longitude_holos]
             else:
-                vals = [array(x) for x in self.holonomizer.R_longitude_evs]
+                vals = [array([x for n,x in track])
+                        for track in self.holonomizer.R_longitude_evs]
         else:
             if self.gluing_form:
-                vals = [array(x) for x in self.holonomizer.R_longitude_holos]
+                vals = [array([x for n,x in track])
+                        for track in self.holonomizer.R_longitude_holos]
             else:
-                vals = [array(x) for x in self.holonomizer.R_longitude_evs]
+                vals = [array([x for n,x in track])
+                        for track in self.holonomizer.R_longitude_evs]
         if multi == False:
             self.multiplicities, vals = self.demultiply(vals)
         self.sampled_coeffs = self.symmetric_funcs(vals)
@@ -1375,12 +1381,13 @@ class Apoly:
         if result:
             print 'Passed!'
         return result
-    
-    def tighten(self, T=1.0):
-        self.holonomizer.tighten(T)
-        roots = [array(x) for x in self.holonomizer.T_longitude_evs]
-        self.T_sampled_coeffs = self.symmetric_funcs(roots)
-        self.T_raw_coeffs = array([ifft(x) for x in self.T_sampled_coeffs])
+
+# This won't work with bad fibers.    
+#    def tighten(self, T=1.0):
+#      self.holonomizer.tighten(T)
+#      roots = [array(x) for x in self.holonomizer.T_longitude_evs]
+#      self.T_sampled_coeffs = self.symmetric_funcs(roots)
+#      self.T_raw_coeffs = array([ifft(x) for x in self.T_sampled_coeffs])
 
 class Slope:
       def __init__(self, xy, power_scale=(1,1)):

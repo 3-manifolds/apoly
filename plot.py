@@ -1,4 +1,4 @@
-import time, sys, os, Tkinter, numpy
+import time, sys, os, Tkinter, numpy, math
 from subprocess import Popen, PIPE
 
 class Plot:
@@ -6,11 +6,12 @@ class Plot:
     Plot a vector or list of vectors. Assumes that all vectors in the list
     are the same type (Float or Complex) Prompts for which ones to show.
     """
-    def __init__(self, data, quiet=True, commands='', linewidth=2, style='lines'):
-        self.quiet = quiet
-        self.commands = commands
-        self.linewidth=linewidth
-        self.style = style
+    def __init__(self, data, **kwargs):
+        self.quiet = kwargs.get('quiet', True)
+        self.commands = kwargs.get('commands', '')
+        self.linewidth=kwargs.get('linewidth', 1.0)
+        self.style = kwargs.get('style', '')
+        self.args = kwargs
         if isinstance(data[0], list) or isinstance(data[0], numpy.ndarray):
             self.data = data
         else:
@@ -25,7 +26,7 @@ class Plot:
             print 'Type is:', self.type
 
         self.start_plotter()
-        if len(self.data) > 1:
+        if len(self.data) > 0:
             self.show_plots()
         else:
             self.create_plot([0])
@@ -74,10 +75,10 @@ class GnuplotPlot(Plot):
     Prompts for which ones to show.
     """
     def start_plotter(self):
-        self.gnuplot = Popen(['export DYLD_LIBRARY_PATH= ;export LD_LIBRARY_PATH= ;gnuplot',
-                              '-geometry 1200x1000+200+0'],
-                             shell=True,
-                             stdin=PIPE)
+        self.gnuplot = Popen([
+            'export DYLD_LIBRARY_PATH= ;export LD_LIBRARY_PATH= ;gnuplot',
+            '-geometry 1200x1000+200+0'],
+                             shell=True, stdin=PIPE)
     
     def create_plot(self, funcs):
         spec = []
@@ -128,12 +129,10 @@ class MatplotPlot(Plot):
         func_selector_frame = ttk.Frame(MF.window)
         for i in range(n):
             var = self.funcs_to_show[i]
-            button = ttk.Checkbutton(func_selector_frame, text='%d'% i, variable=var,
-                                     command=self.show_plots)
+            button = ttk.Checkbutton(func_selector_frame, text='%d'% i,
+                                     variable=var, command=self.show_plots)
             button.grid(column=0, row=i, sticky=(Tk.N, Tk.W))
             #frame = ttk.Frame(func_selector_frame, 
-
-
         func_selector_frame.grid(column=1, row=0, sticky=(Tk.N))
         MF.window.columnconfigure(1, weight=0)
 
@@ -142,32 +141,61 @@ class MatplotPlot(Plot):
 
     def color(self, i):
         from matplotlib.cm import gnuplot2
-        import math
-        return gnuplot2(i/8.0 - math.floor(i/8.0))
-    def color(self, i):
-        from matplotlib.cm import gnuplot2
-        import math
         return gnuplot2(i/8.0 - math.floor(i/8.0))
 
+    def split_data(self, data):
+        """
+        The data has None entries between points which should not
+        be connected by arcs in the picture.  This method splits the
+        data at the None entries, and builds the x and y lists for the
+        plotter.
+        """
+        result = []
+        if self.type == 'complex':
+            x_list, y_list = [], [] 
+            for d in data:
+                if d is None and len(x_list) > 1:
+                    result.append( (x_list, y_list) )
+                    x_list, y_list = [], [] 
+                else:
+                    x_list.append(d.real)
+                    y_list.append(d.imag)
+        else:
+            x_list, y_list = [], [] 
+            for n, d in enumerate(data):
+                if d is None and len(x_list) > 1:
+                    result.append( (x_list, y_list) )
+                    x_list, y_list =[], []
+                else:
+                    x_list.append(n)
+                    y_list.append(d)
+        result.append( (x_list, y_list) )
+        return result
+                    
     def create_plot(self):
         axis = self.figure.axis
         axis.clear()
         for i, data in enumerate(self.data):
-            data = [d for d in data if not d is None]
             if self.funcs_to_show[i].get():
-                if self.type == 'complex':
-                    X, Y = [d.real for d in data], [d.imag for d in data]
-                else:
-                    X, Y = range(len(data)), data
-                axis.plot(X, Y, color=self.color(i), linewidth=self.linewidth, label='%d' % i)
+                lists = self.split_data(data)
+                for X, Y in lists:
+                    axis.plot(X, Y, color=self.color(i),
+                              linewidth=self.linewidth, label='%d' % i)
 
         # Add whitespace and room for the legend
-        xa, xb = axis.get_xlim()
-        sx = (xb-xa)/12.0
-        axis.set_xlim(xa-sx, xb+sx)
-        ya, yb = axis.get_ylim()
-        sy = (yb-ya)/12.0
-        axis.set_ylim(ya-sy, yb+sy)
+        limits = self.args.get('limits', False)
+        if limits:
+            xlim, ylim = limits
+            axis.set_xlim(*xlim)
+            axis.set_ylim(*ylim)
+            axis.set_aspect('equal')
+        else:
+            xa, xb = axis.get_xlim()
+            sx = (xb-xa)/12.0
+            axis.set_xlim(xa-sx, xb+sx)
+            ya, yb = axis.get_ylim()
+            sy = (yb-ya)/12.0
+            axis.set_ylim(ya-sy, yb+sy)
         legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
         self.figure.draw()
 
