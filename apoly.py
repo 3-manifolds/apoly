@@ -926,7 +926,10 @@ class PECharVariety:
     def show(self, su2_only=False):
         self.build_arcs( su2_only)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
-        Plot(self.arcs, limits=((0.0, 1.0), (0.0, 0.5)),
+        Plot(self.arcs,
+             limits=((0.0, 1.0), (0.0, 0.5)),
+             margins=(0,0),
+             title=self.manifold_name,
              commands="""
                     set terminal %s title "%s" size 1400,700
                     set xrange [0.0:1.0]

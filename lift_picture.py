@@ -87,7 +87,7 @@ class SL2RLifter:
 
     def show(self):
         plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs ]
-        self.plot = Plot(plotlist)
+        self.plot = Plot(plotlist, title=self.holonomizer.manifold.name())
 
     def show_slopes(self):
         M = self.holonomizer.manifold.copy()
