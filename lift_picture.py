@@ -4,7 +4,7 @@ from real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
 
 def in_SL2R(H, f, s):
     shape = H.T_fibers[f].shapes[s]
-    ev = H.T_longitude_evs[s][f]
+    ev = H.T_longitude_evs[s][f][1]
     if abs(1.0 - abs(ev)) > .00001:
         return False
     if H.in_SU2(shape):
