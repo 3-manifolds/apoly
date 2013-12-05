@@ -125,7 +125,7 @@ class MatplotPlot(Plot):
         self.figure = MF = MatplotFigure(add_subplot=False)
         MF.axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
         n = len(self.data)
-        self.funcs_to_show = [Tk.BooleanVar(value=True) for i in range(n)]
+        self.funcs_to_show = [Tk.BooleanVar(MF.window, value=True) for i in range(n)]
         func_selector_frame = ttk.Frame(MF.window)
         for i in range(n):
             var = self.funcs_to_show[i]
