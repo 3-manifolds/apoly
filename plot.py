@@ -182,30 +182,30 @@ class MatplotPlot(Plot):
                     axis.plot(X, Y, color=self.color(i),
                               linewidth=self.linewidth, label='%d' % i)
 
-        # Add whitespace and room for the legend
-        limits = self.args.get('limits', False)
-        if limits:
-            xlim, ylim = limits
-            axis.set_xlim(*xlim)
-            axis.set_ylim(*ylim)
-            axis.set_aspect('equal')
-        else:
-            xa, xb = axis.get_xlim()
-            sx = (xb-xa)/12.0
-            axis.set_xlim(xa-sx, xb+sx)
-            ya, yb = axis.get_ylim()
-            sy = (yb-ya)/12.0
-            axis.set_ylim(ya-sy, yb+sy)
+        # Configure the plot based on keyword arguments
+        limits = self.args.get('limits', None)
+        xlim, ylim = limits if limits else (axis.get_xlim(), axis.get_ylim())
+
+        margin_x, margin_y = self.args.get('margins', (0.1, 0.1))
+        sx = ( xlim[1] - xlim[0])*margin_x
+        xlim = (xlim[0] - sx, xlim[1] + sx)
+        sy = (ylim[1] - ylim[0])*margin_y
+        ylim = (ylim[0] - sy, ylim[1] + sy)
+        axis.set_xlim(*xlim)
+        axis.set_ylim(*ylim)
+
+        axis.set_aspect(self.args.get('aspect', 'auto'))
         legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
+        decorator = self.args.get('decorator', None)
+
+        title = self.args.get('title', None)
+        if title:
+            self.figure.window.title(title)
+
         self.figure.draw()
 
     def show_plots(self):
         self.create_plot()
-
-        
-        
-            
-            
     
 
 if __name__ == "__main__":
