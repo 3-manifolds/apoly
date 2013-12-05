@@ -1,5 +1,5 @@
-import IPython.lib.inputhook as ih
-ih.clear_inputhook()
+#import IPython.lib.inputhook as ih
+#ih.clear_inputhook()
 import euler, real_reps
 import cPickle as pickle
 import bz2
