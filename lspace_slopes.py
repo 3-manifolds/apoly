@@ -1,5 +1,5 @@
 from sage.all import *
-from lspace_data import names, L_space_slopes, genus
+from data.lspace import names, L_space_slopes, genus
 import snappy
 
 
@@ -21,8 +21,8 @@ class Cone:
         if self.det() != 1:
             self.a, self.b = w[0], w[1]
             self.c, self.d = v[0], v[1]
-        if self.det() != 1:
-            raise ValueError('Input vectors are not a basis for Z^2')
+        #if self.det() != 1:
+        #    raise ValueError('Input vectors are not a basis for Z^2')
          
     def det(self):
         return self.a*self.d - self.b*self.c
@@ -44,21 +44,23 @@ class Cone:
 
 def compute_L_space_range(name):
     M = snappy.Manifold(name)
-    g = genus[name]
-    L_slopes = [vector(s) for s in L_space_slopes[name]]
     K = snappy.CensusKnots.identify(M)
     A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
     A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
     Ainv = A**(-1)
-    L_slopes_in_K = [normalize(A*s) for s in L_slopes]
-    s = 1 if min(s[1] for s in L_slopes_in_K) >= 0 else -1
-    knot_meridian =  vector(ZZ, (1, 0))
-    l_space_edge = vector(ZZ, (2*g - 1, s))
+    try:
+        g = genus[name]
+        L_slopes = [vector(s) for s in L_space_slopes[name]]
+        L_slopes_in_K = [normalize(A*s) for s in L_slopes]
+        s = 1 if min(s[1] for s in L_slopes_in_K) >= 0 else -1
+        knot_meridian =  vector(ZZ, (1, 0))
+        l_space_edge = vector(ZZ, (2*g - 1, s))
+    except KeyError:
+        g = compute_genus(M)
+        knot_meridian =  vector(ZZ, (2*g - 1, 1))
+        l_space_edge = vector(ZZ, (2*g - 1, -1))
+       
     C = Cone(Ainv*knot_meridian, Ainv*l_space_edge)
-    assert {slope in C for slope in L_space_slopes[name]} == {True}
+    #assert {slope in C for slope in L_space_slopes[name]} == {True}
     return C
-
-    
-        
-
 

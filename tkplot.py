@@ -30,6 +30,13 @@ else:
     import tkinter as Tk
 import ttk
 
+# Fix Sage issue; breaks attach.
+try:
+    import IPython.lib.inputhook as ih
+    ih.clear_inputhook()
+except:
+    pass
+
 # Load MatplotLib
 import matplotlib
 matplotlib.use('TkAgg')
@@ -73,5 +80,5 @@ if __name__ == "__main__":
     MF = MatplotFigure()
     t = arange(0.0,3.0,0.01)
     s = sin(2*pi*t)
-    MF.axis.plot(t,s)
+    ans = MF.axis.plot(t,s)
     Tk.mainloop()

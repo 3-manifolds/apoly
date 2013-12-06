@@ -123,18 +123,57 @@ class MatplotPlot(Plot):
     def start_plotter(self):
         from tkplot import MatplotFigure, Tk, ttk
         self.figure = MF = MatplotFigure(add_subplot=False)
-        MF.axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
+        MF.axis = axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
+        self.arcs = []
+        self.arc_vars = dict()
+        for i, data in enumerate(self.data):
+                lists = self.split_data(data)
+                for X, Y in lists:
+                    arc = axis.plot(X, Y, color=self.color(i),
+                              linewidth=self.linewidth, label='%d' % i)
+                    var = Tk.BooleanVar(MF.window, value=True)
+                    var.trace('w', self.arc_button_callback)
+                    var.arc = arc
+                    self.arc_vars[var._name] = var
+                    
+        # Configure the plot based on keyword arguments
+        limits = self.args.get('limits', None)
+        xlim, ylim = limits if limits else (axis.get_xlim(), axis.get_ylim())
+
+        margin_x, margin_y = self.args.get('margins', (0.1, 0.1))
+        sx = ( xlim[1] - xlim[0])*margin_x
+        xlim = (xlim[0] - sx, xlim[1] + sx)
+        sy = (ylim[1] - ylim[0])*margin_y
+        ylim = (ylim[0] - sy, ylim[1] + sy)
+        axis.set_xlim(*xlim)
+        axis.set_ylim(*ylim)
+
+        axis.set_aspect(self.args.get('aspect', 'auto'))
+        legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
+        decorator = self.args.get('decorator', None)
+
+        title = self.args.get('title', None)
+        if title:
+            self.figure.window.title(title)
+
         n = len(self.data)
-        self.funcs_to_show = [Tk.BooleanVar(MF.window, value=True) for i in range(n)]
         func_selector_frame = ttk.Frame(MF.window)
-        for i in range(n):
-            var = self.funcs_to_show[i]
-            button = ttk.Checkbutton(func_selector_frame, text='%d'% i,
-                                     variable=var, command=self.show_plots)
+        for i, var in enumerate(self.arc_vars):
+            button = ttk.Checkbutton(func_selector_frame, text='%d'% i, variable=var)
             button.grid(column=0, row=i, sticky=(Tk.N, Tk.W))
             #frame = ttk.Frame(func_selector_frame, 
         func_selector_frame.grid(column=1, row=0, sticky=(Tk.N))
         MF.window.columnconfigure(1, weight=0)
+
+    def arc_button_callback(self, var_name, *args):
+        var = self.arc_vars[var_name]
+        if var.get():
+            for subarc in var.arc:
+                self.figure.axis.add_artist(subarc)
+        else:
+            for subarc in var.arc:
+                subarc.remove()
+        self.figure.draw()
 
     def test(self):
         return [v.get() for v in self.funcs_to_show]
@@ -173,35 +212,6 @@ class MatplotPlot(Plot):
         return result
                     
     def create_plot(self):
-        axis = self.figure.axis
-        axis.clear()
-        for i, data in enumerate(self.data):
-            if self.funcs_to_show[i].get():
-                lists = self.split_data(data)
-                for X, Y in lists:
-                    axis.plot(X, Y, color=self.color(i),
-                              linewidth=self.linewidth, label='%d' % i)
-
-        # Configure the plot based on keyword arguments
-        limits = self.args.get('limits', None)
-        xlim, ylim = limits if limits else (axis.get_xlim(), axis.get_ylim())
-
-        margin_x, margin_y = self.args.get('margins', (0.1, 0.1))
-        sx = ( xlim[1] - xlim[0])*margin_x
-        xlim = (xlim[0] - sx, xlim[1] + sx)
-        sy = (ylim[1] - ylim[0])*margin_y
-        ylim = (ylim[0] - sy, ylim[1] + sy)
-        axis.set_xlim(*xlim)
-        axis.set_ylim(*ylim)
-
-        axis.set_aspect(self.args.get('aspect', 'auto'))
-        legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
-        decorator = self.args.get('decorator', None)
-
-        title = self.args.get('title', None)
-        if title:
-            self.figure.window.title(title)
-
         self.figure.draw()
 
     def show_plots(self):
