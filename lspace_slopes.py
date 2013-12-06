@@ -1,15 +1,9 @@
 from sage.all import *
-from data.lspace import names, L_space_slopes, genus
+from data import cusped_manifold_dict
 import snappy
 
-
-manifolds = [snappy.Manifold(name) for name in names]
-
-def compute_genus(M):
-    g0 = snappy.snap.alexander_polynomial(M).degree()/2
-    g1 = (snappy.snap.hyperbolic_torsion(M, bits_prec=1000).degree()/2 + 1)/2
-    assert g0 == g1
-    return g0
+def compute_norm(M):
+    return snappy.snap.hyperbolic_torsion(M, bits_prec=1000).degree()/2
 
 def normalize(slope):
     return -slope if slope[0] < 0 else slope
@@ -41,7 +35,6 @@ class Cone:
     def __repr__(self):
         return "<Cone (%d, %d) (%d, %d)>" % (self.a, self.b, self.c, self.d)
 
-
 def compute_L_space_range(name):
     M = snappy.Manifold(name)
     K = snappy.CensusKnots.identify(M)
@@ -49,16 +42,17 @@ def compute_L_space_range(name):
     A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
     Ainv = A**(-1)
     try:
-        g = genus[name]
-        L_slopes = [vector(s) for s in L_space_slopes[name]]
+        M_data = cusped_manifold_dict[name]
+        X = M_data.thurston_norm
+        L_slopes = [vector(s) for s in M_data.L_space_fillings]
         L_slopes_in_K = [normalize(A*s) for s in L_slopes]
         s = 1 if min(s[1] for s in L_slopes_in_K) >= 0 else -1
         knot_meridian =  vector(ZZ, (1, 0))
-        l_space_edge = vector(ZZ, (2*g - 1, s))
+        l_space_edge = vector(ZZ, (X, s))
     except KeyError:
-        g = compute_genus(M)
-        knot_meridian =  vector(ZZ, (2*g - 1, 1))
-        l_space_edge = vector(ZZ, (2*g - 1, -1))
+        X = compute_norm(M)
+        knot_meridian =  vector(ZZ, (X, 1))
+        l_space_edge = vector(ZZ, (X, -1))
        
     C = Cone(Ainv*knot_meridian, Ainv*l_space_edge)
     #assert {slope in C for slope in L_space_slopes[name]} == {True}
