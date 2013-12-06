@@ -4,11 +4,8 @@ import bz2
 from apoly import *
 from lift_picture import *
 from lspace_slopes import compute_L_space_range as Lcone
-from lspace_slopes import genus
-from data.lspace import longitudes
+from data import cusped_manifold_dict
 import snappy
-
-
 from snappy.snap.nsagetools import MapToFreeAbelianization, homological_longitude
 
 def draw_line(L, curve_on_torus, **kwargs):
@@ -85,14 +82,13 @@ def in_homological_coordinates(L, num_shifts):
     assert abs(l[1]) == 1
     C = matrix(ZZ, [[1,0], l]).transpose()
     
-    
-
 def quick_draw(name):
     L = load_data(name)
     #add_shifts(L, 2)
     L.show()
     cone(L, Lcone(name))
-    draw_line(L, longitudes[name], color='green')
+    longitude = cusped_manifold_dict[name].longitude
+    draw_line(L, longitude, color='green')
     return L
 
 L = load_data('m016')
