@@ -4,7 +4,7 @@ import numpy
 from numpy import array, matrix, ndarray
 from numpy import dot, prod, diag, transpose, zeros, ones, eye
 from numpy import log, exp, pi, sqrt, ceil
-from numpy import dtype, take, arange, sum, where, vstack
+from numpy import dtype, take, arange, sum, where, vstack, argmin
 from numpy import float64
 from numpy.linalg import svd, norm, eig, solve, lstsq
 from numpy.fft import ifft
@@ -24,6 +24,7 @@ import time, sys, os, Tkinter
 
 #from plot import GnuplotPlot as Plot
 from plot import MatplotPlot as Plot
+global_linewidth=1
 
 complex_array = numpy.vectorize(complex)
 
@@ -672,6 +673,14 @@ class Holonomizer:
             longitude_eigenvalues.append(E)
         return longitude_holonomies, longitude_eigenvalues
 
+    def permutation(self, fiber_list):
+        result = Permutation()
+        start, end = fiber_list[0].shapes, fiber_list[-1].shapes
+        for n, shape in enumerate(start):
+            distances = array([shape.dist(end_shape) for end_shape in end])
+            result[n] = argmin(distances)
+        return result
+
     def compute_volumes(self, fiber_list):
         volumes = [ [] for n in range(self.degree) ]
         for fiber in fiber_list:
@@ -689,13 +698,6 @@ class Holonomizer:
         relators = G.relators()
         generators = G.generators()
         for shape in fiber.shapes:
-            #  I had to move the dehn_fill((0,0)) inside the loop to get this to
-            #  work correctly when there is a denominator, e.g. for 8_17.
-            #  The values of the longitude traces were coming out wrong.
-            #  This was not needed with SnapPeaPython --- SnapPy bug???
-            #  Why is it needed at all?
-#            self.manifold.dehn_fill((0,0))
-            #  This seems OK now with the new set_tetrahedra_shapes.
             S = shape()
             self.manifold.set_tetrahedra_shapes(S, S, [(0,0)])
             M, N = len(relators), G.num_generators()
@@ -720,14 +722,12 @@ class Holonomizer:
         return traces
 
     def SL2C(self, word, shape):
-#        self.manifold.dehn_fill((0,0))
         S = shape()
         self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
         G = self.manifold.fundamental_group()
         return G.SL2C(word)
 
     def O31(self, word, shape):
-#        self.manifold.dehn_fill((0,0))
         S = shape()
         self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
         G = self.manifold.fundamental_group()
@@ -780,10 +780,10 @@ class Holonomizer:
         return True
     
     def show_R_longitude_evs(self):
-        R_plot = Plot(self.R_longitude_evs)
+        R_plot = Plot([[x for n,x in track] for track in self.R_longitude_evs])
 
     def show_T_longitude_evs(self):
-        T_plot = Plot(self.T_longitude_evs)
+        T_plot = Plot([[x for n,x in track] for track in self.T_longitude_evs])
 
     def holo_permutation(self):
         return [self.R_fibers[0].shapes.index(p)
@@ -859,16 +859,48 @@ class PECharVariety:
         self.order = self.holonomizer.order
         self.manifold = self.holonomizer.manifold
 
+    def build_components(self):
+        H = self.holonomizer
+        delta_M = -1.0/self.order
+        M_args = 0.5 * ( arange(self.order, dtype=float64)*delta_M % 1.0 )
+        # Construct the subarcs which lie on the unit torus
+        arcs = []
+        for track in self.holonomizer.T_longitude_evs:
+            arc = [] 
+            for n, ev in enumerate(track):
+                if (0.99999 < abs(ev) < 1.00001):
+                    arc.append( (log(ev).imag/(2*pi))%1.0 + M_args[m]*1j )
+            arcs.append(arc)
+        # Group the subarcs into components and add the cups and caps
+        orbits = H.permutation(H.R_fibers).orbits()
+        self.components = [ [arcs[n] for n in orbit] for orbit in orbits]
+        for component in self.components:
+            # add caps
+            component.sort(key=lambda x : x[0].imag, reverse=True)
+            n = len(component)
+            while n > 0:
+                print n
+                if component[n][0].imag == component[n-1][0].imag:
+                    component[n].insert(0, component[n-1][0])
+                    n -= 1
+                n -= 1
+            # add cups
+            component.sort(key=lambda x : x[-1].imag)
+            n = len(component)
+            while n > 0:
+                if component[n][-1].imag == component[n-1].imag:
+                    component[n].append(component[n-1][-1])
+                    n -= 1
+                n -= 1
+
     def build_arcs(self, su2_only=False):
         self.arcs = []
         self.arc_info = []
         H = self.holonomizer
-        M_args = -arange(self.order, dtype=float64)/self.order
-        M_args = 0.5*(M_args%1.0)
+        delta_M = -1.0/self.order
+        M_args = 0.5 * ( arange(self.order, dtype=float64)*delta_M % 1.0 )
         for m, track in enumerate(self.holonomizer.T_longitude_evs):
-            arc = []
-            info = []
-            lastL = 0
+            arc, info = [], []
             for n, ev in track:
                 su2_ok = True
                 if su2_only:
@@ -880,14 +912,15 @@ class PECharVariety:
                 if (0.99999 < abs(ev) < 1.00001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
                     if len(arc)>1:
-                        if arc[-1].real > 0.9 and L < 0.1: #L became >1
-                            arc.append(1.0 + 1j*M_args[n-1])
-                            arc.append(None)
-                            arc.append(0.0 + 1j*M_args[n-1])
-                        elif arc[-1].real < 0.1 and L > 0.9: # L became > 1
-                            arc.append(0.0 + 1j*M_args[n-1])
-                            arc.append(None)
-                            arc.append(1.0 + 1j*M_args[n-1])
+                        last_L = arc[-1].real
+                        if last_L > 0.8 and L < 0.2:   # L became > 1
+                            length = 1.0 - last_L + L 
+                            interp = ((1.0-last_L)*M_args[n] + L*M_args[n-1])/length
+                            arc += [ 1.0 + interp*1j,  None,  0.0 + interp*1j]
+                        elif last_L < 0.2 and L > 0.8: # L became < 1
+                            length = last_L + 1.0 - L 
+                            interp = (last_L*M_args[n] + (1.0 - L)*M_args[n-1])/length
+                            arc += [0.0 + interp*1j , None, 1.0 + interp*1j] 
                     arc.append( L + 1j*(M_args[n]) )
                     info.append( (m,n) )
                 else:
@@ -899,14 +932,34 @@ class PECharVariety:
             if arc:
                 self.arcs.append(arc)
                 self.arc_info.append(info)
+        arcs = list(self.arcs)
+        # add caps
+        arcs.sort(key=lambda x : x[0].imag, reverse=True)
+        n = len(arcs) - 1
+        while n > 0:
+            if ( arcs[n][0].imag == arcs[n-1][0].imag
+                 and abs(arcs[n][0].real - arcs[n-1][0].real) > 0.01 ):
+                arcs[n].insert(0, arcs[n-1][0])
+                n -= 1
+            n -= 1
+        # add cups
+        arcs.sort(key=lambda x : x[-1].imag)
+        n = len(arcs) - 1
+        while n > 0:
+            if ( arcs[n][-1].imag == arcs[n-1][-1].imag > 0.01
+                 and abs(arcs[n][-1].real - arcs[n-1][-1].real) > 0.01 ):
+                arcs[n].append(arcs[n-1][-1])
+                n -= 1
+            n -= 1
         # Clean up endpoints at the corners of the pillowcase.
         for arc in self.arcs:
             try:
                 if abs(arc[1] - arc[0]) > 0.25:
                     if arc[0].imag > 0.45 and arc[1].imag  < 0.05 :
+                        print 'top'
                         arc[0] = arc[0] - 0.5j
                     elif arc[0].imag < 0.05 and arc[1].imag > 0.45:
-                        arc[0] = arc[0] + 0.5j
+                        arc[0] = arc[0]+ 0.5j
                     if arc[0].real > 0.9 and arc[1].real < 0.1:
                         arc[0] = arc[0] - 1.0
                     elif arc[0].real < 0.1 and arc[1].real > 0.9:
@@ -922,14 +975,19 @@ class PECharVariety:
                         arc[-1] = arc[-1] + 1.0
             except TypeError:
                 pass
-                        
+
+ 
     def show(self, su2_only=False):
         self.build_arcs( su2_only)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
         Plot(self.arcs,
              limits=((0.0, 1.0), (0.0, 0.5)),
              margins=(0,0),
+             aspect='equal',
              title=self.manifold_name,
+             linewidth=global_linewidth,
+             extra_lines=[((0.5,0.5),(0.0,1.0))],
+             extra_line_args={'color':'black', 'linewidth':0.5},
              commands="""
                     set terminal %s title "%s" size 1400,700
                     set xrange [0.0:1.0]
@@ -937,7 +995,8 @@ class PECharVariety:
                     set xtics 0.5
                     set grid xtics nomxtics
                     set mxtics
-                    """%(term, self.manifold_name), linewidth=2)
+                    """%(term, self.manifold_name),
+             )
     
 class Apoly:
     """
@@ -947,7 +1006,7 @@ class Apoly:
     <mfld>           is a manifold name recognized by SnapPy, or a Manifold instance.
     <gluing_form>    (True/False) indicates whether to find a "standard"
                      A-polynomial, or the gluing variety variant.
-    <tighten>        (True/False) if set, try to get the holonomizer to 
+    <tight>           (True/False) if set, try to get the holonomizer to 
                      tighten to radius 1, and use those fibers.
     <fft_size>       must be at least twice the M-degree.  Try doubling this
                      if the coefficients seem to be wrapping.
@@ -984,7 +1043,7 @@ class Apoly:
 
     An Apoly object prints itself as a matrix of coefficients.
   """
-    def __init__(self, mfld, fft_size=128, gluing_form=False, tighten=False,
+    def __init__(self, mfld, fft_size=128, gluing_form=False, tight=False,
                  radius=1.02, denom=None, multi=False,
                  apoly_dir='apolys', gpoly_dir='gpolys',
                  base_dir='base_fibers', hint_dir='hints'):
@@ -995,7 +1054,7 @@ class Apoly:
             self.mfld_name = mfld
             self.manifold = Manifold(mfld)
         self.gluing_form = gluing_form
-        self.tighten = tighten
+        self.tight = tight
         options = {'fft_size'    : fft_size,
                    'denom'       : denom,
                    'multi'       : multi,
@@ -1028,7 +1087,7 @@ class Apoly:
             order=self.fft_size,
             radius=self.radius,
             saved_base_fiber=saved_base_fiber)
-        if self.tighten:
+        if self.tight:
             self.holonomizer.tighten(1.01)
             if self.gluing_form:
                 vals = [array([x for n,x in track])
@@ -1327,10 +1386,10 @@ class Apoly:
         print self.newton_polygon.lower_slopes
         
     def show_R_longitude_evs(self):
-        R_plot = Plot(self.holonomizer.R_longitude_evs)
+        self.holonomizer.show_R_longitude_evs()
 
     def show_T_longitude_evs(self):
-        T_plot = Plot(self.holonomizer.T_longitude_evs)
+        self.holonomizer.show_T_longitude_evs()
 
     def show_coefficients(self):
         plot = Plot(self.normalized_coeffs.real)
@@ -1356,6 +1415,9 @@ class Apoly:
     def show_T_volumes(self):
         H = self.holonomizer
         Plot(H.compute_volumes(H.T_fibers))
+
+    def tighten(self):
+        self.holonomizer.tighten()
 
     def verify(self):
         result = True
@@ -1592,6 +1654,23 @@ class PolyViewer:
             for object in self.sides:
                   self.canvas.delete(object)
             self.sides=[]
+
+class Permutation(dict):
+    def orbits(self):
+        points = set(self.keys())
+        orbits = []
+        while points:
+            first = n = points.pop()
+            orbit = [first]
+            while True:
+                n = self[n]
+                if n == first:
+                    orbits.append(orbit)
+                    break
+                else:
+                    points.remove(n)
+                    orbit.append(n)
+        return orbits
 
 winding = lambda x : (sum(log(x[1:]/x[:-1]).imag) + log(x[0]/x[-1]).imag)/(-2*pi)
 if got_sage:
