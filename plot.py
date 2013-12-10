@@ -212,7 +212,41 @@ class MatplotPlot(Plot):
         return result
                     
     def create_plot(self):
+        axis = self.figure.axis
+
+        # Configure the plot based on keyword arguments
+        margin_x, margin_y = self.args.get('margins', (0.1, 0.1))
+        limits = self.args.get('limits', None)
+        xlim, ylim = limits if limits else (axis.get_xlim(), axis.get_ylim())
+        sx = ( xlim[1] - xlim[0])*margin_x
+        sy = (ylim[1] - ylim[0])*margin_y
+        xlim = (xlim[0] - sx, xlim[1] + sx)
+        ylim = (ylim[0] - sy, ylim[1] + sy)
+        axis.set_xlim(*xlim)
+        axis.set_ylim(*ylim)
+
+        axis.set_aspect(self.args.get('aspect', 'auto'))
+        legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
+        decorator = self.args.get('decorator', None)
+
+        title = self.args.get('title', None)
+        if title:
+            self.figure.window.title(title)
+
+        extra_lines = self.args.get('extra_lines', None)
+        if extra_lines:
+            extra_line_args = self.args.get('extra_line_args', {})
+            for xx, yy in extra_lines:
+                self.draw_line(xx, yy, **extra_line_args)
+            
         self.figure.draw()
+
+    def draw_line(self, xx, yy,  **kwargs):
+        ax = self.figure.axis
+        if 'color' not in kwargs:
+            kwargs['color'] = 'black'
+        ax.plot( xx, yy, **kwargs)
+        ax.plot( xx, yy, **kwargs)
 
     def show_plots(self):
         self.create_plot()

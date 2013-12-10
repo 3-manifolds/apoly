@@ -7,9 +7,11 @@ from lspace_slopes import compute_L_space_range as Lcone
 from data import cusped_manifold_dict
 import snappy
 from snappy.snap.nsagetools import MapToFreeAbelianization, homological_longitude
+from matplotlib.patches import Polygon
 
 def draw_line(L, curve_on_torus, **kwargs):
-    ax = L.plot.figure.axis
+    fig = L.plot.figure
+    ax = fig.axis
     x = ax.get_xlim()[1]
     y = ax.get_ylim()[1]
     a, b = curve_on_torus
@@ -19,16 +21,43 @@ def draw_line(L, curve_on_torus, **kwargs):
         ax.plot( (0, 0), (0, -a*5), **kwargs)
     #if a != 0:
     #    ax.plot( (0, -b*y/a), (0, y), **kwargs )
-        
+    fig.draw()
 
-def cone(L, C):
+def XXcone(L, C):
     u, v = C.gens()
     draw_line(L, 10000*u + v, color='black')
     draw_line(L, 10000*v + u, color='black')
     for i in range(1, 5):
         for j in range(1, 5):
             draw_line(L, i*u + j*v, color='red')
-  
+    L.plot.figure.draw()
+
+def cone(L, C):
+    #XXcone(L,C)
+    fig = L.plot.figure
+    ax = fig.axis
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    points = [array([0.0, 0.0])]
+    A = array(C.gens())
+    det = A[0,0]*A[1,1] - A[0,1]*A[1,0]
+    print A
+    for n, curve in enumerate(A):
+        a, b = curve
+        if b != 0:
+            points.append(array([xmax, -a*xmax/b]))
+        else:
+            if a > 0:
+                y = ymax if n == 0 else ymin
+            else:
+                y = ymin if n == 0 else ymax
+#            y = 100*a if n == 0 else -100*a
+            points.append(array([0, y]))
+    points.insert(2, array([xmax, y]))
+    vertices = array(points)
+    print vertices
+    p = Polygon(vertices, color='red', alpha=0.2, fill=True)
+    L.plot.figure.axis.add_artist(p)
     L.plot.figure.draw()
 
 def make_lifter(name):
