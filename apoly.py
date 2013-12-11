@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from random import random, randint
+from subprocess import Popen, PIPE
+import time, sys, os, Tkinter
 import numpy
 from numpy import array, matrix, ndarray
 from numpy import dot, prod, diag, transpose, zeros, ones, eye
@@ -18,9 +21,7 @@ from phc import *
 import snappy
 snappy.SnapPy.matrix = matrix
 from snappy import *
-from random import random, randint
-from subprocess import Popen, PIPE
-import time, sys, os, Tkinter
+from spherogram.graphs import Graph
 
 #from plot import GnuplotPlot as Plot
 from plot import MatplotPlot as Plot
@@ -933,6 +934,7 @@ class PECharVariety:
                 self.arcs.append(arc)
                 self.arc_info.append(info)
         arcs = list(self.arcs)
+        curve_graph = Graph([], range(len(self.arcs)))
         # add caps
         arcs.sort(key=lambda x : x[0].imag, reverse=True)
         n = len(arcs) - 1
@@ -940,6 +942,9 @@ class PECharVariety:
             if ( arcs[n][0].imag == arcs[n-1][0].imag
                  and abs(arcs[n][0].real - arcs[n-1][0].real) > 0.01 ):
                 arcs[n].insert(0, arcs[n-1][0])
+                curve_graph.add_edge(
+                    self.arcs.index(arcs[n]),
+                    self.arcs.index(arcs[n-1]))                 
                 n -= 1
             n -= 1
         # add cups
@@ -949,8 +954,16 @@ class PECharVariety:
             if ( arcs[n][-1].imag == arcs[n-1][-1].imag > 0.01
                  and abs(arcs[n][-1].real - arcs[n-1][-1].real) > 0.01 ):
                 arcs[n].append(arcs[n-1][-1])
+                curve_graph.add_edge(
+                    self.arcs.index(arcs[n]),
+                    self.arcs.index(arcs[n-1]))                 
                 n -= 1
             n -= 1
+        # build the color dict
+        self.colors = {}
+        for n, component in enumerate(curve_graph.components()):
+            for m in component:
+                self.colors[m] = n
         # Clean up endpoints at the corners of the pillowcase.
         for arc in self.arcs:
             try:
@@ -975,7 +988,6 @@ class PECharVariety:
                         arc[-1] = arc[-1] + 1.0
             except TypeError:
                 pass
-
  
     def show(self, su2_only=False):
         self.build_arcs( su2_only)

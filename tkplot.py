@@ -43,7 +43,6 @@ matplotlib.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 
-
 class MatplotFigure:
     def __init__(self, add_subplot=True, root=None, **kwargs):
         args = kwargs
