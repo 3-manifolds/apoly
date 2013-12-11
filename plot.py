@@ -11,6 +11,7 @@ class Plot:
         self.commands = kwargs.get('commands', '')
         self.linewidth=kwargs.get('linewidth', 1.0)
         self.style = kwargs.get('style', '')
+        self.color_dict = kwargs.get('colors', None)
         self.args = kwargs
         if isinstance(data[0], list) or isinstance(data[0], numpy.ndarray):
             self.data = data
@@ -150,7 +151,6 @@ class MatplotPlot(Plot):
 
         axis.set_aspect(self.args.get('aspect', 'auto'))
         legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
-        decorator = self.args.get('decorator', None)
 
         title = self.args.get('title', None)
         if title:
@@ -185,9 +185,12 @@ class MatplotPlot(Plot):
     def split_data(self, data):
         """
         The data has None entries between points which should not
-        be connected by arcs in the picture.  This method splits the
-        data at the None entries, and builds the x and y lists for the
-        plotter.
+        be connected by arcs in the picture.  For example, in the case of a curve
+        on a pillowcase the breaks are inserted when the curve wraps over an
+        edge of the pillowcase.
+        This method splits the data at the None entries, and builds
+        the x and y lists for the plotter.
+
         """
         result = []
         if self.type == 'complex':
@@ -227,7 +230,6 @@ class MatplotPlot(Plot):
 
         axis.set_aspect(self.args.get('aspect', 'auto'))
         legend = axis.legend(loc='upper left', bbox_to_anchor = (1.0, 1.0))
-        decorator = self.args.get('decorator', None)
 
         title = self.args.get('title', None)
         if title:
