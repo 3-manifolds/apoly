@@ -1,5 +1,9 @@
 import time, sys, os, Tkinter, numpy, math
 from subprocess import Popen, PIPE
+try:
+    from tkplot import MatplotFigure, Tk, ttk
+except ImportError:
+    pass
 
 class Plot:
     """
@@ -11,7 +15,7 @@ class Plot:
         self.commands = kwargs.get('commands', '')
         self.linewidth=kwargs.get('linewidth', 1.0)
         self.style = kwargs.get('style', '')
-        self.color_dict = kwargs.get('colors', None)
+        self.color_dict = kwargs.get('colors', {})
         self.args = kwargs
         if isinstance(data[0], list) or isinstance(data[0], numpy.ndarray):
             self.data = data
@@ -122,22 +126,29 @@ class MatplotPlot(Plot):
     #    Plot.__init__(self, data, **kwargs)
          
     def start_plotter(self):
-        from tkplot import MatplotFigure, Tk, ttk
         self.figure = MF = MatplotFigure(add_subplot=False)
         MF.axis = axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
         self.arcs = []
         self.arc_vars = dict()
         for i, data in enumerate(self.data):
-                lists = self.split_data(data)
-                for X, Y in lists:
-                    arc = axis.plot(X, Y, color=self.color(i),
-                              linewidth=self.linewidth, label='%d' % i)
-                    var = Tk.BooleanVar(MF.window, value=True)
-                    var.trace('w', self.arc_button_callback)
-                    var.arc = arc
-                    self.arc_vars[var._name] = var
+            color = self.color_dict.get(i, i)
+            lists = self.split_data(data)
+            for X, Y in lists:
+                arc = axis.plot(X, Y, color=self.color(color),
+                                linewidth=self.linewidth, label='%d' % color)
+                var = Tk.BooleanVar(MF.window, value=True)
+                var.trace('w', self.arc_button_callback)
+                var.arc = arc
+                self.arc_vars[var._name] = var
+        self.configure()
                     
-        # Configure the plot based on keyword arguments
+    def configure(self):
+        """
+        Configure the plot based on keyword arguments.
+        """
+        figure = self.figure
+        axis = figure.axis
+        window = figure.window
         limits = self.args.get('limits', None)
         xlim, ylim = limits if limits else (axis.get_xlim(), axis.get_ylim())
 
@@ -154,19 +165,20 @@ class MatplotPlot(Plot):
 
         title = self.args.get('title', None)
         if title:
-            self.figure.window.title(title)
+            figure.window.title(title)
 
         n = len(self.data)
-        func_selector_frame = ttk.Frame(MF.window)
+        func_selector_frame = ttk.Frame(window)
         for i, var in enumerate(self.arc_vars):
-            button = ttk.Checkbutton(func_selector_frame, text='%d'% i, variable=var)
+            button = ttk.Checkbutton(func_selector_frame,
+                                     text='%d'% i, variable=var)
             button.grid(column=0, row=i, sticky=(Tk.N, Tk.W))
-            #frame = ttk.Frame(func_selector_frame, 
         func_selector_frame.grid(column=1, row=0, sticky=(Tk.N))
-        MF.window.columnconfigure(1, weight=0)
+        window.columnconfigure(1, weight=0)
 
     def arc_button_callback(self, var_name, *args):
         var = self.arc_vars[var_name]
+        print var.arc
         if var.get():
             for subarc in var.arc:
                 self.figure.axis.add_artist(subarc)

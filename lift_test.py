@@ -41,7 +41,6 @@ def cone(L, C):
     points = [array([0.0, 0.0])]
     A = array(C.gens())
     det = A[0,0]*A[1,1] - A[0,1]*A[1,0]
-    print A
     for n, curve in enumerate(A):
         a, b = curve
         if b != 0:
@@ -55,7 +54,6 @@ def cone(L, C):
             points.append(array([0, y]))
     points.insert(2, array([xmax, y]))
     vertices = array(points)
-    print vertices
     p = Polygon(vertices, color='red', alpha=0.2, fill=True)
     L.plot.figure.axis.add_artist(p)
     L.plot.figure.draw()

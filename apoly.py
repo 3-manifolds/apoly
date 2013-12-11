@@ -998,6 +998,7 @@ class PECharVariety:
              aspect='equal',
              title=self.manifold_name,
              linewidth=global_linewidth,
+             colors = self.colors,
              extra_lines=[((0.5,0.5),(0.0,1.0))],
              extra_line_args={'color':'black', 'linewidth':0.75},
              commands="""
