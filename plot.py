@@ -130,16 +130,28 @@ class MatplotPlot(Plot):
         MF.axis = axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
         self.arcs = []
         self.arc_vars = dict()
+        groups = dict()
         for i, data in enumerate(self.data):
             color = self.color_dict.get(i, i)
+            if color not in groups:
+                groups[color] = []
+            arc = groups[color]
             lists = self.split_data(data)
             for X, Y in lists:
-                arc = axis.plot(X, Y, color=self.color(color),
-                                linewidth=self.linewidth, label='%d' % color)
-                var = Tk.BooleanVar(MF.window, value=True)
-                var.trace('w', self.arc_button_callback)
-                var.arc = arc
-                self.arc_vars[var._name] = var
+                # axis.plot returns a list of line2D objects.
+                # we only assign a label to the first thing in each group
+                if len(arc) == 0:
+                    arc += axis.plot(X, Y, color=self.color(color),
+                                     linewidth=self.linewidth, label='%d' % color)
+                else:
+                    arc += axis.plot(X, Y, color=self.color(color),
+                                     linewidth=self.linewidth)
+                    
+        for color in groups:
+            var = Tk.BooleanVar(MF.window, value=True)
+            var.trace('w', self.arc_button_callback)
+            var.arc = groups[color]
+            self.arc_vars[var._name] = var
         self.configure()
                     
     def configure(self):
@@ -178,7 +190,6 @@ class MatplotPlot(Plot):
 
     def arc_button_callback(self, var_name, *args):
         var = self.arc_vars[var_name]
-        print var.arc
         if var.get():
             for subarc in var.arc:
                 self.figure.axis.add_artist(subarc)
