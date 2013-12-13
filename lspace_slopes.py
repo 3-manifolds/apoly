@@ -1,6 +1,7 @@
 from sage.all import *
 from data import cusped_manifold_dict
 import snappy
+from snappy.snap.nsagetools import homological_longitude
 
 def compute_norm(M):
     return snappy.snap.hyperbolic_torsion(M, bits_prec=1000).degree()/2
@@ -37,10 +38,14 @@ class Cone:
 
 def compute_L_space_range(name):
     M = snappy.Manifold(name)
-    K = snappy.CensusKnots.identify(M)
-    A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
-    A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
-    Ainv = A**(-1)
+    longitude = homological_longitude(M)
+    try:
+        K = snappy.CensusKnots.identify(M)
+        A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
+        A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
+        Ainv = A**(-1)
+    except:
+        A = None
     try:
         M_data = cusped_manifold_dict[name]
         X = M_data.thurston_norm
@@ -53,8 +58,10 @@ def compute_L_space_range(name):
         X = compute_norm(M)
         knot_meridian =  vector(ZZ, (X, 1))
         l_space_edge = vector(ZZ, (X, -1))
-       
-    C = Cone(Ainv*knot_meridian, Ainv*l_space_edge)
-    #assert {slope in C for slope in L_space_slopes[name]} == {True}
-    return C
+    if A:
+        C = Cone(Ainv*knot_meridian, Ainv*l_space_edge)
+        #assert {slope in C for slope in L_space_slopes[name]} == {True}
+        return C
+    else:
+        return None
 

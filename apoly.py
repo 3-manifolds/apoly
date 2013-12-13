@@ -280,8 +280,15 @@ class Glunomial:
 
     def __call__(self, Z):
         W = 1 - Z
-        return self.sign*prod(Z**self.A)*prod(W**self.B)
-
+        try:
+            return self.sign*prod(Z**self.A)*prod(W**self.B)
+        except ValueError:
+            print 'Glunomial evaluation crashed on %s'%self
+            print 'A =', self.A
+            print 'B =', self.B
+            print 'c =', self.sign
+            print 'Z =', Z
+            raise ValueError
     def gradient(self, Z):
         W = 1 - Z
         return self.sign*prod(Z**self.A)*prod(W**self.B)*(self.A/Z - self.B/W)

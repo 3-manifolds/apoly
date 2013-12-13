@@ -113,9 +113,14 @@ def quick_draw(name):
     L = load_data(name)
     #add_shifts(L, 2)
     L.show()
-    cone(L, Lcone(name))
+    try:
+        cone(L, Lcone(name))
+    except:
+        pass
     longitude = cusped_manifold_dict[name].longitude
     draw_line(L, longitude, color='green')
+    for slope in cusped_manifold_dict[name].L_space_fillings:
+        draw_line(L, slope, color='red')
     return L
 
 L = load_data('m016')
