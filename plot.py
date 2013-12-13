@@ -17,18 +17,22 @@ class Plot:
         self.style = kwargs.get('style', '')
         self.color_dict = kwargs.get('colors', {})
         self.args = kwargs
-        if isinstance(data[0], list) or isinstance(data[0], numpy.ndarray):
+        if isinstance(data, list) and len(data) == 0:
             self.data = data
+            self.type = None
         else:
-            self.data = [data]
-        duck = self.data[0][0]
-        self.type = type(duck)
-        if 'complex' in str(self.type):
-            self.type = 'complex'
-        elif 'float' in str(self.type):
-            self.type = 'float'
-        else:
-            print 'Type is:', self.type
+            if isinstance(data[0], list) or isinstance(data[0], numpy.ndarray):
+                self.data = data
+            else:
+                self.data = [data]
+            duck = self.data[0][0]
+            self.type = type(duck)
+            if 'complex' in str(self.type):
+                self.type = 'complex'
+            elif 'float' in str(self.type):
+                self.type = 'float'
+            else:
+                print 'Type is:', self.type
 
         self.start_plotter()
         if len(self.data) > 0:
@@ -178,6 +182,11 @@ class MatplotPlot(Plot):
         title = self.args.get('title', None)
         if title:
             figure.window.title(title)
+            axis.text(0.02, 0.98, title, 
+                      horizontalalignment='left', verticalalignment='top',
+                      transform=axis.transAxes, fontsize=15)
+            
+
 
         n = len(self.data)
         func_selector_frame = ttk.Frame(window)
@@ -237,7 +246,7 @@ class MatplotPlot(Plot):
         result.append( (x_list, y_list) )
         return result
                     
-    def create_plot(self):
+    def create_plot(self, dummy_arg=None):
         axis = self.figure.axis
 
         # Configure the plot based on keyword arguments

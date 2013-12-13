@@ -1,6 +1,6 @@
 import euler, real_reps
 import cPickle as pickle
-import bz2
+import bz2, glob, os
 from apoly import *
 from lift_picture import *
 from lspace_slopes import compute_L_space_range as Lcone
@@ -71,6 +71,9 @@ def save_data(name):
     file = bz2.BZ2File('lifters/' + name + '.obj.bz2', 'w')
     pickle.dump(L, file)
 
+def precomputed_lifters():
+    return [match[8:-8] for match in glob.glob('lifters/*.obj.bz2')]
+    
 def load_data(name):
     """
     Returns V, L.
@@ -123,4 +126,17 @@ def quick_draw(name):
         draw_line(L, slope, color='red')
     return L
 
-L = load_data('m016')
+def save_all_plots():
+    from matplotlib.backends.backend_pdf import PdfPages
+    pdf_pages = PdfPages('all_plots.pdf')
+    for name in precomputed_lifters():
+        L = quick_draw(name)
+        L.plot.figure.figure.savefig(pdf_pages, format='pdf')
+    pdf_pages.close()
+    
+#save_all_plots()
+    
+
+#L = load_data('m016')
+
+
