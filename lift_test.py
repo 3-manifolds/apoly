@@ -124,6 +124,8 @@ def quick_draw(name):
     draw_line(L, longitude, color='green')
     for slope in cusped_manifold_dict[name].L_space_fillings:
         draw_line(L, slope, color='red')
+    for slope in cusped_manifold_dict[name].non_L_space_fillings:
+        draw_line(L, slope, color='#A9F5F2')
     return L
 
 def save_all_plots():
