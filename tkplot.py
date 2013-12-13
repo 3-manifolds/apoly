@@ -20,6 +20,12 @@ matplotlib, and then do
 
 Alternatively use the patched spkg (which has a modified 
 make-setup-config.py file at the top leve ) available at  http://dunfield.info/temp/matplotlib-1.2.1.spkg
+
+Note that the TkAgg backend will be compiled against one's current
+version of Tk, which might not be the one that Sage is linked against.
+So inaddition one may need to recompile the Tkinter module via
+
+   sage -f python
 """
 
 # Load Tkinter
@@ -46,7 +52,7 @@ from matplotlib.backends.backend_tkagg import NavigationToolbar2TkAgg
 class MatplotFigure:
     def __init__(self, add_subplot=True, root=None, **kwargs):
         args = kwargs
-        figure = matplotlib.figure.Figure(figsize=(6,6), dpi=100)
+        figure = matplotlib.figure.Figure(figsize=(10,6), dpi=100)
         figure.set_facecolor('white')
         axis = figure.add_subplot(111) if add_subplot else None
         self.figure, self.axis = figure, axis
