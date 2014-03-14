@@ -1,4 +1,4 @@
-from snappy.snap.shapes import pari, gen, float_to_pari, complex_to_pari, pari_column_vector
+from snappy.snap.shapes import pari, gen, float_to_pari, complex_to_pari, pari_column_vector, prec_bits_to_dec
 from snappy.snap.shapes import enough_gluing_equations, eval_gluing_equation
 from snappy.snap.shapes import infinity_norm, pari_matrix, pari_vector_to_list, _within_sage, ComplexField
 from sage.all import exp, CC
@@ -22,9 +22,9 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
     """
 
     if dec_prec is None:
-        dec_prec = gen.prec_bits_to_dec(bits_prec)
+        dec_prec = prec_bits_to_dec(bits_prec)
     else:
-        bits_prec = gen.prec_dec_to_bits(dec_prec)
+        bits_prec = prec_dec_to_bits(dec_prec)
     working_prec = dec_prec + 10
     target_espilon = float_to_pari(10.0, working_prec)**-dec_prec
     
@@ -32,7 +32,7 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
 
     if "polished_shapes" in manifold._cache.keys():
         curr_sol = manifold._cache["polished_shapes"]
-        if curr_sol[0].precision() >= gen.prec_dec_to_words(dec_prec):
+        if curr_sol[0].precision() >= prec_dec_to_words(dec_prec):
             if _within_sage:
                 CC = ComplexField(bits_prec)
                 return [CC(z) for z in curr_sol]
