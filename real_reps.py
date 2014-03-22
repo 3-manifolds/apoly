@@ -1,38 +1,9 @@
 from sage.all import *
-from polish_reps import PSL2CRepOf3ManifoldGroup, polished_holonomy, apply_representation, GL2C_inverse, SL2C_inverse, CheckRepresentationFailed
+from polish_reps import (PSL2CRepOf3ManifoldGroup, polished_holonomy,
+                         apply_representation, GL2C_inverse, SL2C_inverse,
+                         CheckRepresentationFailed, conjugacy_classes_in_Fn)
 import euler
 
-def random_word(letters, N):
-    return ''.join( [random.choice(letters) for i in range(N)] )
- 
-def inverse_word(word):
-    return word.swapcase()[::-1]
-
-def words_in_Fn(gens, n):
-    next_letter = dict()
-    sym_gens = gens + [g.swapcase() for g in gens]
-    for g in sym_gens:
-        next_letter[g] = [h for h in sym_gens if h != g.swapcase()]
-    if n == 1:
-        return sym_gens
-    else:
-        words = words_in_Fn(gens, n - 1)
-        ans = []
-        for word in words:
-            ans += [word + g for g in next_letter[word[-1]] if len(word) == n - 1]
-        return words + ans
-
-def is_lex_first_in_conjugacy_class(word):
-    if word[0] == word[-1].swapcase():
-        return False
-    for i in range(len(word)):
-        other = word[i:] + word[:i]
-        if other < word or other.swapcase() < word:
-            return False
-    return True
-
-def conjugacy_classes_in_Fn(gens, n):
-    return [word for word in words_in_Fn(gens, n) if is_lex_first_in_conjugacy_class(word)]
 
 def real_part_of_matrix_with_error(A):
     RR = RealField(A.base_ring().precision())

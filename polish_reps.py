@@ -2,6 +2,42 @@ from sage.all import vector, matrix, MatrixSpace, ZZ, RR, RealField, prod, Polyn
 import sys, os, re, tempfile, random, string
 from shapes import polished_tetrahedra_shapes
 
+def random_word(letters, N):
+    return ''.join( [random.choice(letters) for i in range(N)] )
+ 
+def inverse_word(word):
+    return word.swapcase()[::-1]
+
+def words_in_Fn(gens, n):
+    next_letter = dict()
+    sym_gens = gens + [g.swapcase() for g in gens]
+    for g in sym_gens:
+        next_letter[g] = [h for h in sym_gens if h != g.swapcase()]
+    if n == 1:
+        return sym_gens
+    else:
+        words = words_in_Fn(gens, n - 1)
+        ans = []
+        for word in words:
+            ans += [word + g for g in next_letter[word[-1]] if len(word) == n - 1]
+        return words + ans
+
+def is_lex_first_in_conjugacy_class(word):
+    if word[0] == word[-1].swapcase():
+        return False
+    for i in range(len(word)):
+        other = word[i:] + word[:i]
+        if other < word or other.swapcase() < word:
+            return False
+    return True
+
+def conjugacy_classes_in_Fn(gens, n):
+    return [word for word in words_in_Fn(gens, n) if is_lex_first_in_conjugacy_class(word)]
+
+
+class CheckRepresentationFailed(Exception):
+    pass
+
 def SL2C_inverse(A):
     return matrix([[A[1,1], -A[0,1]], [-A[1,0], A[0, 0]]])
 
@@ -44,13 +80,13 @@ def polished_holonomy(M, target_meridian_holonomy_arg,
     if lift_to_SL2:
         PG.lift_to_SL2C()
     else:
-        assert PG.is_projective_representation()
+        if not PG.is_projective_representation():
+            raise CheckRepresentationFailed
 
     return PG
 
 
-class CheckRepresentationFailed(Exception):
-    pass
+
     
 class PSL2CRepOf3ManifoldGroup:
     """
@@ -89,10 +125,10 @@ class PSL2CRepOf3ManifoldGroup:
                 G = self.manifold.fundamental_group(*self.fundamental_group_args)
             else:
                 G = polished_holonomy(self.manifold,
-                                         self.target_meridian_holonomy_arg,
-                                         bits_prec=precision,
-                                         fundamental_group_args=self.fundamental_group_args,
-                                         lift_to_SL2=False, ignore_solution_type=True)
+                                self.target_meridian_holonomy_arg,
+                                bits_prec=precision,
+                                fundamental_group_args=self.fundamental_group_args,
+                                lift_to_SL2=False, ignore_solution_type=True)
                 if not G.check_representation() < RR(2.0)**(-0.8*precision):
                     raise CheckRepresentationFailed
 

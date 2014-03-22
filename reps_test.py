@@ -34,16 +34,17 @@ def sample_rep_with_peripheral_renormalization(index, precision):
                                     rough_shapes=shapes,
                                     precision=precision,
                                     fundamental_group_args=[True, False, True])
- 
+test_bits = 256
+
 def basic_test():
     for i in range(len(sample_data)):
-        rho = sample_rep(i, 1000)
+        rho = sample_rep(i, test_bits)
         error = rho.polished_holonomy().check_representation()
         print rho.manifold, rho.manifold.homology(), error.log(2).ceil(), rho.representation_lifts()
 
 def current_test():
     for i in [k for k in range(len(sample_data)) if not k in [1]]:
-        rho = sample_rep_with_peripheral_renormalization(i, 1000)
+        rho = sample_rep_with_peripheral_renormalization(i, test_bits)
         meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
         error = rho.polished_holonomy().check_representation()
         print sample_data[i][0],  rho.manifold.homology(), error.log(2).ceil(), rho.representation_lifts()
@@ -55,7 +56,7 @@ def current_test():
         print "   new meridian: ", rho_til(meridian)
         print "   new longitude: ", rho_til(longitude)
 
-        # rho =  sample_rep(i, 1000)
+        # rho =  sample_rep(i, test_bits)
         # meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
         # if abs(rho(meridian).trace()) <= 2 and abs(rho(longitude).trace()) <=2:
         #     p, q = map(int, rho.manifold.cusp_info(0).filling)
