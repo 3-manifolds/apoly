@@ -14,7 +14,7 @@ class Plot:
         self.quiet = kwargs.get('quiet', True)
         self.commands = kwargs.get('commands', '')
         self.linewidth=kwargs.get('linewidth', 1.0)
-        self.style = kwargs.get('style', '')
+        self.style = kwargs.get('style', 'lines')
         self.color_dict = kwargs.get('colors', {})
         self.args = kwargs
         if isinstance(data, list) and len(data) == 0:
