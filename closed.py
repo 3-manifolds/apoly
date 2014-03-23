@@ -51,12 +51,13 @@ class PHCGluingSolutionsOfClosed:
     def solutions(self, working_prec=230):
         psl2Rtilde, psl2R, su2, rest = [], [], [], []
         for sol in self.raw_solutions():
+            print sol
             rho = PSL2CRepOf3ManifoldGroup(self.manifold,
                             target_meridian_holonomy_arg=0,
                             rough_shapes=sol)
             try:
                 rho.polished_holonomy(working_prec)
-            except:
+            except CheckRepresentationFailed:
                 continue
             if rho.appears_to_be_SU2_rep():
                 su2.append(sol)

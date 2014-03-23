@@ -93,7 +93,15 @@ def conjugator_into_PSL2R(A, B):
     """
     C = eigenbasis(A, B)
     AA = GL2C_inverse(C)*A*C
-    return C * matrix(A.base_ring(), [[1, 0], [0, 1/AA[0,1]]])
+    BB = GL2C_inverse(C)*B*C
+    a = AA[0,1]
+    b = BB[1,0]
+    if abs(a) > abs(b):
+        e, f = 1, abs(a)/a
+    else:
+        e, f = abs(b)/b, 1
+
+    return C * matrix(A.base_ring(), [[e, 0], [0, f]])
 
 def conjugate_into_PSL2R(rho, max_error, depth=5):
     gens = rho.generators()
@@ -103,7 +111,7 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
 
     for word in conjugacy_classes_in_Fn(gens, depth):
         U = rho(word)
-        if abs(U.trace()) > 2.0001:
+        if abs(U.trace()) > 2.0001 :
             conjugates = [ rho(g)*U*rho(g.upper()) for g in gens ]
             V = max(conjugates, key=lambda M: (U - M).norm())
             C =  conjugator_into_PSL2R(U, V)

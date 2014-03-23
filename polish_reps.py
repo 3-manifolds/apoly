@@ -1,6 +1,6 @@
 from sage.all import vector, matrix, MatrixSpace, ZZ, RR, RealField, prod, PolynomialRing
 import sys, os, re, tempfile, random, string
-from shapes import polished_tetrahedra_shapes
+from shapes import polished_tetrahedra_shapes, GoodShapesNotFound
 
 def random_word(letters, N):
     return ''.join( [random.choice(letters) for i in range(N)] )
@@ -69,7 +69,13 @@ def polished_holonomy(M, target_meridian_holonomy_arg,
         error = ZZ(10)**(-dec_prec*0.8)
     else:
         error = ZZ(2)**(-bits_prec*0.8)
-    shapes = polished_tetrahedra_shapes(M, target_meridian_holonomy_arg, bits_prec=bits_prec, dec_prec=dec_prec)
+
+    try:
+        shapes = polished_tetrahedra_shapes(M, target_meridian_holonomy_arg,
+                                            bits_prec=bits_prec, dec_prec=dec_prec)
+    except GoodShapesNotFound:
+        raise CheckRepresentationFailed
+    
     G = M.fundamental_group(*fundamental_group_args)
     N = generators.SnapPy_to_Mcomplex(M, shapes)
     init_tet_vertices = initial_tet_ideal_vertices(N)
