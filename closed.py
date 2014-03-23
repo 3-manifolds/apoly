@@ -5,7 +5,7 @@ Using PHC to find solutions to the gluing equations for closed manifolds.
 import os, sys, re
 import snappy, phc
 from polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
-from real_reps import PSL2RRepOf3ManifoldGroup
+from real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
 
 def clean_complex(z, epsilon=1e-20):
     r, i = abs(z.real), abs(z.imag)
@@ -62,11 +62,14 @@ class PHCGluingSolutionsOfClosed:
             if rho.appears_to_be_SU2_rep():
                 su2.append(sol)
             elif rho.is_PSL2R_rep():
-                rho = PSL2RRepOf3ManifoldGroup(rho)
-                if rho.representation_lifts():
-                    psl2Rtilde.append(sol)
-                else:
-                    psl2R.append(sol)
+                try:
+                    rho = PSL2RRepOf3ManifoldGroup(rho)
+                    if rho.representation_lifts():
+                        psl2Rtilde.append(sol)
+                    else:
+                        psl2R.append(sol)
+                except CouldNotConjugateIntoPSL2R:
+                    pass
             else:
                 rest.append(sol)
 
@@ -77,14 +80,14 @@ class PHCGluingSolutionsOfClosed:
         left, right = ['1'], ['1']
         for n, a in enumerate(A):
             if a > 0:
-                left += ['X%s'%n]*int(a)
-            else:
-                right += ['X%s'%n]*int(-a)
+                left += ['X%s^%s'% (n, a)]
+            elif a < 0:
+                right += ['X%s^%s'% (n, -a)]
         for n, b in enumerate(B):
             if b > 0:
-                left += ['Y%s'%n]*int(b)
-            else:
-                right += ['Y%s'%n]*int(-b)
+                left += ['Y%s^%s'% (n, b)]
+            elif b < 0:
+                right += ['Y%s^%s'% (n, -b)]
         op = ' - ' if c == 1 else ' + '
         return '*'.join(left) + op + '*'.join(right)
 
