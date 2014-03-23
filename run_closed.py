@@ -16,6 +16,8 @@ test_line11="K14n18445\tBvAOAQIEAwUEBTke4eFOOUs=\t[[[7, 5], [-3, -2]]]"
 test_line12="DT[obejfDHLKaoICnEBgjm]\tBsIPAAQFAwMEBY0b5BtyjXI=\t[[[8, -3], [3, -1]]]"
 test_line13="L14n14006\tBsgPAQQDAwUFBU6ckx5jcpM=\t[[[5, 8], [-2, -3]]]"
 test_line14 = "L14n32374\tBsEPAAQDBQMEBY3kGxuNcnI=\t[[[-3, -1], [1, 0]]]"
+test_line15= "K14n11024\tBdEDAAMDBAMEcrFOsRs5\t[[[-8, -3], [3, 1]]]"
+test_line16= "DT[obejfgHJImloKDCNaEb]\tBdEDAAIDBAQEOXIt5MZL\t[[[-5, -9], [-1, -2]]]"
 
 def manifold_from_bytes_n_cobs(encoded_bytes, cobs):
     R = snappy.Manifold('empty')
@@ -36,7 +38,7 @@ def find_reps(line):
     new_data = [counts] + list(ans)
     return line + '\t' + '\t'.join(map(repr, new_data)), True
 
-#find_reps(test_line14)
+#find_reps(test_line16)
 T = taskdb.TaskDatabase('find_reps')
 T.run_function(find_reps, 50)
 
