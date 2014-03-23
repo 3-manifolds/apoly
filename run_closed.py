@@ -18,6 +18,18 @@ test_line13="L14n14006\tBsgPAQQDAwUFBU6ckx5jcpM=\t[[[5, 8], [-2, -3]]]"
 test_line14 = "L14n32374\tBsEPAAQDBQMEBY3kGxuNcnI=\t[[[-3, -1], [1, 0]]]"
 test_line15= "K14n11024\tBdEDAAMDBAMEcrFOsRs5\t[[[-8, -3], [3, 1]]]"
 test_line16= "DT[obejfgHJImloKDCNaEb]\tBdEDAAIDBAQEOXIt5MZL\t[[[-5, -9], [-1, -2]]]"
+test_line17="K14n15425\tBqYNAAEDAwQFBR6xkzlOTjk=\t[[[-5, 4], [1, -1]]]"
+test_line18="DT[obfighjiMkaoelfcNDb]\tBtIOAAIEAwUEBUuTsbEbHjk=\t[[[-13, 8], [-5, 3]]]"
+test_line19="DT[obcldEhjnLibgkoMFAc]\tBsQPAgMCBQQEBbE5Hk7kkzk=\t[[[-2, 7], [-1, 3]]]"
+
+test_line20="K14n9577\tB2A/BAUCBAYGBgWNGznhTpyccg==\t[[[-3, 4], [-1, 1]]]"
+test_line21="K14n17683\tB8I3AAUFBAMEBgYe0mPSHnI2OQ==\t[[[1, -3], [0, 1]]]"
+test_line22="K14n23488\tB2A/BQIEBgYFBgVOHpOHNtKceA==\t[[[4, -7], [-1, 2]]]"
+test_line23="DT[obghhdIkMjogCnabELf]\tB6Q+AQQEBgUFBgYbG5yxThuNjQ==\t[[[5, -4], [-1, 1]]]"
+test_line24="DT[obcldfJbmgalNKCOeHI]\tB+A9AgUDBAYEBQZsGzk5sTlyHg==\t[[[-5, 3], [-2, 1]]]"
+test_line25="DT[obcldEhknMJLbFGoIAc]\tCIT7AgYFBgcFBwcGLTYt5E6NbMZL\t[[[1, 4], [0, 1]]]"
+test_line26="DT[obdkefkhaocMdLbnIGj]\tB8E+AAQFBAUGBgaNTrGNbHKT4Q==\t[[[8, -3], [3, -1]]]"
+
 
 def manifold_from_bytes_n_cobs(encoded_bytes, cobs):
     R = snappy.Manifold('empty')
@@ -38,7 +50,13 @@ def find_reps(line):
     new_data = [counts] + list(ans)
     return line + '\t' + '\t'.join(map(repr, new_data)), True
 
-#find_reps(test_line16)
+#find_reps(test_line20)
+#find_reps(test_line21)
+#find_reps(test_line22)
+#find_reps(test_line23)
+#find_reps(test_line24)
+#find_reps(test_line25)
+#find_reps(test_line26)
 T = taskdb.TaskDatabase('find_reps')
 T.run_function(find_reps, 50)
 
