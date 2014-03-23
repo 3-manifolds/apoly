@@ -4,6 +4,8 @@ from polish_reps import (PSL2CRepOf3ManifoldGroup, polished_holonomy,
                          CheckRepresentationFailed, conjugacy_classes_in_Fn)
 import euler
 
+class CouldNotConjugateIntoPSL2R(Exception):
+    pass
 
 def real_part_of_matrix_with_error(A):
     RR = RealField(A.base_ring().precision())
@@ -103,7 +105,7 @@ def conjugator_into_PSL2R(A, B):
 
     return C * matrix(A.base_ring(), [[e, 0], [0, f]])
 
-def conjugate_into_PSL2R(rho, max_error, depth=5):
+def conjugate_into_PSL2R(rho, max_error, depth=7):
     gens = rho.generators()
     new_mats, error = real_part_of_matricies_with_error(rho(g) for g in gens)
     if error < max_error:
@@ -114,13 +116,15 @@ def conjugate_into_PSL2R(rho, max_error, depth=5):
         if abs(U.trace()) > 2.0001 :
             conjugates = [ rho(g)*U*rho(g.upper()) for g in gens ]
             V = max(conjugates, key=lambda M: (U - M).norm())
-            C =  conjugator_into_PSL2R(U, V)
-            new_mats = [GL2C_inverse(C) * rho(g) * C for g in gens]
-            final_mats, error = real_part_of_matricies_with_error(new_mats)
-            assert error < max_error
-            return final_mats
+            comm = U*V*SL2C_inverse(U)*SL2C_inverse(V)
+            if abs(comm.trace() - 2) > 1e-10:
+                C =  conjugator_into_PSL2R(U, V)
+                new_mats = [GL2C_inverse(C) * rho(g) * C for g in gens]
+                final_mats, error = real_part_of_matricies_with_error(new_mats)
+                assert error < max_error
+                return final_mats
 
-    raise ValueError("Couldn't conjugate into PSL(2, R)")
+    raise CouldNotConjugateIntoPSL2R
 
 
 def elliptic_fixed_point(A):

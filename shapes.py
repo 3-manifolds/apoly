@@ -46,7 +46,7 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
         bits_prec = prec_dec_to_bits(dec_prec)
     working_prec = dec_prec + 10
     target_espilon = float_to_pari(10.0, working_prec)**-dec_prec
-    det_epsilon = float_to_pari(10.0, working_prec)**-(dec_prec//4)
+    det_epsilon = float_to_pari(10.0, working_prec)**-(dec_prec//10)
     
     init_shapes = pari_column_vector( [complex_to_pari(z, working_prec) for z in manifold.tetrahedra_shapes('rect')] )
 

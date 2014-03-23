@@ -10,7 +10,12 @@ test_line5 = "L14n53729\tBOwCAQMDA7GxG06x\t[[[-4, -3], [-1, -1]]]"
 test_line6 = "L14n55098\tBPEAAwIDA41OjbEb\t[[[11, -4], [3, -1]]]"
 test_line7 = "DT[obdkefhlijObnacmdkG]\tBfADAgIDAwQEjWxybB45\t[[[7, 19], [-3, -8]]]"
 test_line8="K14n26950\tCVHmAwACAwYGBwYIBwg5cuQbG07kTktL\t[[[3, -4], [1, -1]]]"
-
+test_line9="L14n27443\tDMBt6wIFBAYHCAUHCQoLCwuTTpMteE6THuSxG06x\t[[[-1, 1], [-1, 0]]]"
+test_line10="DT[obcldefcijLMKabONGH]\tBdEDAAIDBAMEjeEb5B45\t[[[-19, -8], [-7, -3]]]"
+test_line11="K14n18445\tBvAOAQIEAwUEBTke4eFOOUs=\t[[[7, 5], [-3, -2]]]"
+test_line12="DT[obejfDHLKaoICnEBgjm]\tBsIPAAQFAwMEBY0b5BtyjXI=\t[[[8, -3], [3, -1]]]"
+test_line13="L14n14006\tBsgPAQQDAwUFBU6ckx5jcpM=\t[[[5, 8], [-2, -3]]]"
+test_line14 = "L14n32374\tBsEPAAQDBQMEBY3kGxuNcnI=\t[[[-3, -1], [1, 0]]]"
 
 def manifold_from_bytes_n_cobs(encoded_bytes, cobs):
     R = snappy.Manifold('empty')
@@ -31,7 +36,7 @@ def find_reps(line):
     new_data = [counts] + list(ans)
     return line + '\t' + '\t'.join(map(repr, new_data)), True
 
-#find_reps(test_line8)
+#find_reps(test_line14)
 T = taskdb.TaskDatabase('find_reps')
 T.run_function(find_reps, 50)
 
