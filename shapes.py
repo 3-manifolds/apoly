@@ -1,7 +1,12 @@
-from snappy.snap.shapes import pari, gen, float_to_pari, complex_to_pari, pari_column_vector, prec_bits_to_dec
-from snappy.snap.shapes import enough_gluing_equations, eval_gluing_equation
-from snappy.snap.shapes import infinity_norm, pari_matrix, pari_vector_to_list, _within_sage, ComplexField
+from snappy.snap.shapes import (pari, gen, float_to_pari, complex_to_pari,
+                                pari_column_vector, prec_bits_to_dec)
+from snappy.snap.shapes import (infinity_norm, pari_matrix, pari_vector_to_list,
+                                enough_gluing_equations, eval_gluing_equation,
+                                _within_sage, ComplexField)
 from sage.all import exp, CC
+
+class GoodShapesNotFound(Exception):
+    pass
 
 def gluing_equation_errors(eqns, shapes, RHS_of_last_eqn):
     last = [eval_gluing_equation(eqns[-1], shapes) - RHS_of_last_eqn]
@@ -13,9 +18,23 @@ def gluing_equation_error(eqns, shapes, RHS_of_last_eqn):
 def sage_complex_to_pari(z, dec_prec):
     return pari.complex( float_to_pari(z.real(), dec_prec), float_to_pari(z.imag(), dec_prec) )
 
+def clean_pari_complex(z, working_prec):
+    epsilon = float_to_pari(10.0, working_prec)**-(working_prec//2)
+    zero = float_to_pari(0.0, working_prec)
+    r, i = z.real().abs(), z.imag().abs()
+    if r < epsilon and i < epsilon:
+        ans = zero
+    elif r < epsilon:
+        ans = pari.complex(zero, z.imag())
+    elif i < epsilon:
+        ans = z.real()
+    else:
+        ans = z
+    assert (z - ans).abs() < epsilon
+    return ans
 
 def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
-                               dec_prec=None, bits_prec=200, ignore_solution_type=False):
+                dec_prec=None, bits_prec=200, ignore_solution_type=False):
     """
     Refines the current solution to the gluing equations to one with
     the specified accuracy.  
@@ -27,17 +46,8 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
         bits_prec = prec_dec_to_bits(dec_prec)
     working_prec = dec_prec + 10
     target_espilon = float_to_pari(10.0, working_prec)**-dec_prec
+    det_epsilon = float_to_pari(10.0, working_prec)**-(dec_prec//4)
     
-    # This is a potentially long calculation, so we cache the result
-
-    if "polished_shapes" in manifold._cache.keys():
-        curr_sol = manifold._cache["polished_shapes"]
-        if curr_sol[0].precision() >= prec_dec_to_words(dec_prec):
-            if _within_sage:
-                CC = ComplexField(bits_prec)
-                return [CC(z) for z in curr_sol]
-            return [s.precision(dec_prec) for s in curr_sol]
-
     init_shapes = pari_column_vector( [complex_to_pari(z, working_prec) for z in manifold.tetrahedra_shapes('rect')] )
 
 
@@ -50,13 +60,13 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
     target = sage_complex_to_pari(arg_high_precision.exp(), working_prec)
     
     if gluing_equation_error(init_equations, init_shapes, target) > pari(0.000001):
-        raise ValueError('Initial solution not very good')
+        raise GoodShapesNotFound('Initial solution not very good')
 
     # Now begin the actual computation
     
     eqns = enough_gluing_equations(manifold)
     assert eqns[-1] == manifold.gluing_equations('rect')[-1]
-    
+
     shapes = init_shapes 
     for i in range(100):
         errors = gluing_equation_errors(eqns, shapes, target)
@@ -66,6 +76,9 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
         derivative = [ [  eqn[0][i]/z  - eqn[1][i]/(1 - z)  for i, z in enumerate(pari_vector_to_list(shapes))] for eqn in eqns]
         derivative[-1] = [ target*x for x in derivative[-1] ]
         derivative = pari_matrix(derivative)
+
+        if derivative.matdet().abs() < det_epsilon:
+            break  # Pari might crash 
         gauss = derivative.matsolve(pari_column_vector(errors))
         shapes = shapes - gauss
 
@@ -73,7 +86,7 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
     error = gluing_equation_error(init_equations, shapes, target)
     total_change = infinity_norm(init_shapes - shapes)
     if error > 1000*target_espilon or total_change > pari(0.0000001):
-        raise ValueError('Did not find a good solution to the gluing equations')
+        raise GoodShapesNotFound('Failed to find solution')
 
 
     manifold._cache["polished_shapes"] = shapes
