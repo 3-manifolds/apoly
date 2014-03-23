@@ -68,8 +68,8 @@ class PHCGluingSolutionsOfClosed:
                         psl2Rtilde.append(sol)
                     else:
                         psl2R.append(sol)
-                except CouldNotConjugateIntoPSL2R:
-                    pass
+                except (CouldNotConjugateIntoPSL2R, CheckRepresentationFailed):
+                    rest.append(sol)
             else:
                 rest.append(sol)
 

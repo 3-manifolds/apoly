@@ -49,7 +49,7 @@ def right_kernel_two_by_two(A):
     prec = CC.precision()
     epsilon = (RealField()(2.0))**(-0.8*prec)
     assert abs(A.determinant()) < epsilon
-    a, b = A[0]
+    a, b = max(A.rows(), key=lambda v:v.norm())
     v = vector(CC, [1, -a/b]) if abs(b) > abs(a) else vector(CC, [-b/a, 1])
     assert (A*v).norm() < epsilon
     return v/v.norm()
