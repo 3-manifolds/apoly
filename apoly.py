@@ -192,7 +192,7 @@ class GluingSystem:
         while True:
             dZ, target = self.newton_step_ls(prev_Z, M_target)
             t = 1.0
-            for k in range(8):
+            for k in range(5):
                 Zn = prev_Z + t*dZ
                 residual = max(abs(target - self(Zn)))
                 if residual < prev_residual:
@@ -256,7 +256,7 @@ class GluingSystem:
                 if debug: print 'Track step reduced to %.17f; condition = %s'%(
                         dT,
                         self.condition(prev_Z))
-                if dT < 2.0**(-32):
+                if dT < 2.0**(-16):
                     raise ValueError('Track failed: step size limit reached.')
         return Zn
     
@@ -558,12 +558,13 @@ class Holonomizer:
         self.radius = radius
         self.fibrator = PHCFibrator(manifold, radius, saved_base_fiber)
         self.manifold = manifold
+        self.hp_manifold = self.manifold.high_precision()
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'The starting fiber contains Tillmann points.'
         self.degree = len(self.base_fiber)
         print 'Degree is %s.'%self.degree
-        # pre-initialize just inserting an integer for each fiber
+        # pre-initialize by just inserting an integer for each fiber
         # if the fiber construction fails, this can be detected by
         # isinstance(fiber, int)
         self.R_fibers = range(order)
@@ -628,6 +629,73 @@ class Holonomizer:
         else:
             print 'OK'
 
+    def wiggle_track(self, R=1.02):
+        """
+        Construct the fibers over the unit circle, trying to avoid
+        collisions by bumping out at singularities.
+        """
+        print 'Wiggle tracking'
+        self.wiggle_fibers = [None for n in range(self.order)]
+        bumps = []
+        R = 1.0
+        arg = log(self.base_fiber.H_meridian).imag%(2*pi)
+        Darg = 2*pi/self.order
+        # The minus makes us consistent with the sign convention of numpy.fft
+        circle = [exp(-n*Darg*1j) for n in range(self.order)]
+        base_index = (self.order - int(arg/Darg))%self.order
+        print 'base index is %d'%base_index
+        print ' %-5s\r'%base_index,
+        self.wiggle_fibers[base_index] = self.fibrator.transport2(
+                self.base_fiber, circle[base_index])
+        for n in xrange(base_index+1, self.order):
+            print ' %-5s\r'%n,
+            sys.stdout.flush()
+            F = self.wiggle_fibers[n-1]
+            try:
+                F = self.fibrator.transport2(F, circle[n])
+            except ValueError:
+                print '\nbumping at %d'%n
+                bumps.append(n)
+                F = self.fibrator.transport2(F, R*circle[n-1])
+                F = self.fibrator.transport2(F, R*circle[n])
+            # self.R_fibers[n].polish()
+            if not F.is_finite():
+                print '**',
+            self.wiggle_fibers[n] = F
+        print '\nreversing'
+        F = self.wiggle_fibers[base_index]
+        for n in xrange(base_index-1, -1, -1):
+            print ' %-5s\r'%n,
+            sys.stdout.flush()
+            try:
+                F = self.fibrator.transport2(F, circle[n])
+            except ValueError:
+                F = self.fibrator.transport2(F, 1.1*circle[n+1])
+                F = self.fibrator.transport2(F, 1.1*circle[n])
+            if not F.is_finite():
+                print '**',
+            self.wiggle_fibers[n] = F
+        print
+        self.last_wiggle_fiber = self.fibrator.transport2(
+            self.wiggle_fibers[-1], self.wiggle_fibers[0].H_meridian)
+        print 'Polishing the end fibers ...'
+        self.wiggle_fibers[0].polish()
+        self.last_wiggle_fiber.polish()
+        print 'Checking for completeness ... ',
+        if not self.last_wiggle_fiber == self.wiggle_fibers[0]:
+            print 'The end fibers did not agree!'
+            print 'It might help to use a larger radius, or you might'
+            print 'have been unlucky in your choice of base fiber.'
+        else:
+            print 'OK'
+        print 'tightening'
+        for n in bumps:
+            try:
+                self.wiggle_fibers[n] = self.fibrator.transport2(
+                    self.wiggle_fibers[n], circle[n])
+            except ValueError:
+                print 'failed to smooth bump at %s'%n
+
     def tighten(self, T=1.0):
         print 'Tightening the circle to radius %s ...'%T
         Darg = 2*pi/self.order
@@ -670,7 +738,9 @@ class Holonomizer:
             tr = longitude_traces[m]
             n, holo = L[index]
             e = sqrt(holo)
+            # Choose the sign for the eigenvalue at the starting fiber
             E = [ (n,e) if abs(e + 1/e - tr) < abs(e + 1/e + tr) else (n,-e) ]
+            # Avoid discontinuities caused by the branch cut used by sqrt
             for n, holo in L[index+1:]:
                 e = sqrt(holo)
                 E.append( (n,e) if abs(e - E[-1][1]) < abs(e + E[-1][1]) else (n,-e) )
@@ -701,13 +771,13 @@ class Holonomizer:
         # Sage complex numbers do not support attributes .real and .imag :^(((
         trace = lambda rep : complex(rep[0,0] + rep[1,1])
         traces = []
-        G = self.manifold.fundamental_group()
-        longitude = G.peripheral_curves()[0][1]
-        relators = G.relators()
-        generators = G.generators()
         for shape in fiber.shapes:
-            S = shape()
-            self.manifold.set_tetrahedra_shapes(S, S, [(0,0)])
+            sh = shape()
+            self.hp_manifold.set_tetrahedra_shapes(sh, sh, [(0,0)])
+            G = self.hp_manifold.fundamental_group()
+            longitude = G.peripheral_curves()[0][1]
+            relators = G.relators()
+            generators = G.generators()
             M, N = len(relators), G.num_generators()
             A = matrix(zeros((M,N),'i'))
             L = zeros(N,'i')
@@ -731,19 +801,19 @@ class Holonomizer:
 
     def SL2C(self, word, shape):
         S = shape()
-        self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
-        G = self.manifold.fundamental_group()
+        self.hp_manifold.set_tetrahedra_shapes(S, None, [(0,0)])
+        G = self.hp_manifold.fundamental_group()
         return G.SL2C(word)
 
     def O31(self, word, shape):
         S = shape()
-        self.manifold.set_tetrahedra_shapes(S, None, [(0,0)])
-        G = self.manifold.fundamental_group()
+        self.hp_manifold.set_tetrahedra_shapes(S, None, [(0,0)])
+        G = self.hp_manifold.fundamental_group()
         return G.O31(word)
 
     def in_SU2(self, shape):
         tolerance = 1.0E-5
-        gens = self.manifold.fundamental_group().generators()
+        gens = self.hp_manifold.fundamental_group().generators()
         # Check that all generators have real trace in [-2,2]
         for S in [self.SL2C(g, shape) for g in gens]:
             tr = complex(S[0,0] + S[1,1])
@@ -867,6 +937,7 @@ class PECharVariety:
         self.order = self.holonomizer.order
         self.manifold = self.holonomizer.manifold
 
+    # not used
     def build_components(self):
         H = self.holonomizer
         delta_M = -1.0/self.order
@@ -1143,7 +1214,7 @@ class Apoly:
                                  for x in self.normalized_coeffs])
         self.noise = self.normalized_coeffs.real - self.int_coeffs
         self.max_noise = [max(abs(x)) for x in self.noise]
-        self.shift = self.find_shift()
+        self.shift = self.old_find_shift()
         print 'Shift is %s'%self.shift
         if self.shift is None:
             print ('Coefficients may be wrapping.  '
@@ -1236,6 +1307,18 @@ class Apoly:
                  shifts.append(j)
        print 'shifts: ', shifts
        return max(shifts), coeffs
+
+    def old_find_shift(self):
+       rows, cols = self.normalized_coeffs.shape
+       shifts = [0]
+       #start from the top and search for the last row above the middle
+       #whose left-most non-zero entry is 1.
+       for i in range(rows):
+          for j in range(1, 1 + cols/2):
+             if abs(abs(self.normalized_coeffs[i][-j]) - 1.) < .01:
+                 shifts.append(j)
+       print 'shifts (old method): ', shifts
+       return max(shifts)
 
     # This is the new one
     def find_shift(self, cutoff=0.1):
