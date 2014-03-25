@@ -1,4 +1,4 @@
-import snappy, closed, taskdb, base64
+import snappy, closed, taskdb, base64, sys
 
 
 test_line0 = "DT[obejfgjMkeaonldbCih]\tAg4BAQF4G9I=\t[[[21, -4], [-5, 1]]]"
@@ -76,8 +76,12 @@ def find_reps(line):
 #for i in range(100):
 #    find_reps(test_line27)
 
-find_reps(test_line28)
-#T = taskdb.TaskDatabase('find_reps_rest')
-#T.run_function(find_reps, 50)
+#find_reps(test_line28)
+
+if __name__ == '__main__':
+    n = int(sys.argv[1]) % 10
+    T = taskdb.TaskDatabase('find_reps_%s' % n)
+    print T
+    #T.run_function(find_reps, 50)
 
 
