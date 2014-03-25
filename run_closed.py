@@ -33,6 +33,20 @@ test_line27="DT[obdkeFGJLnHBKMCOIDa]\tCFHuAAIDBgYFBgcHjXLkGxvh5E5L\t[[[5, 3], [-
 
 test_line28="DT[obghhcfIjbMgNlodEAk]\tBqQPAgMFBAQFBbFseGOHh3I=\t[[[5, -4], [-1, 1]]]"
 
+"""
+DT[obdkeFGJLmBOKCINaDH] CSX0AwABAwYIBwUHCAiNGx7hyZM5J7Hk        [[[-1, 4], [0, -1]]]
+DT[obejfdinKamJbLEHgoc] CaDtAwMFAgYHCAgHCAeT5HIbG4c5cths        [[[-3, -2], [-1, -1]]]
+DT[obghhDFKLOCgMNABJIE] Cdi4AwIDAgQGBgcICAjJbJOxxkvkyZON        [[[3, -7], [1, -2]]]
+DT[obdkefGiklnMdcoaHBj] CQZ7AwABBQQGBwUHCAhLThsbxjkeOeSN        [[[3, -4], [1, -1]]]
+DT[obdkefGiKlNmdcOahBJ] CQD/AwYFAwYHCAcICAecnDnJ5Hic4cZy        [[[-1, -3], [0, -1]]]
+DT[obdkefGIklNMDCoaHBj] CcGuAwADBAYFBgcICAiTY4dL2I3JLWy0        [[[3, -4], [1, -1]]]
+DT[obejfdjgkelbNchaOIM] CYLtAwAFAwQGBwYIBwiNYxtLxofYnEs5        [[[-3, 5], [1, -2]]]
+DT[obdkeGLINmKOJDBFCaH] CUr0AwACAwUIBwYIBwiNHpxyY5yHJ0uN        [[[3, -1], [1, 0]]]
+DT[obdkegmIaLkJDHbOncF] CaD1AwIFBgQHCAcHBgi05BvhTuQetHI5        [[[3, 2], [1, 1]]]
+DT[obdkefgiKnbjLcmOHad] CZDbAwIFAwYGBggHCAhLeCc2nHiNjeGT        [[[4, -5], [1, -1]]]
+DT[obdkeFGIKnBJLCOMHDa] CcKtAwAFBAMGBAcIBwhLTuTkTktOTkuT        [[[5, -2], [-2, 1]]]
+"""
+
 
 def manifold_from_bytes_n_cobs(encoded_bytes, cobs):
     R = snappy.Manifold('empty')
