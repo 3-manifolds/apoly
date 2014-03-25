@@ -77,8 +77,10 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
         derivative[-1] = [ target*x for x in derivative[-1] ]
         derivative = pari_matrix(derivative)
 
-        if derivative.matdet().abs() < det_epsilon:
-            break  # Pari might crash 
+        det = derivative.matdet().abs()
+        det = min(det, 1/det)
+        if det < det_epsilon:
+            break  # Pari might crash
         gauss = derivative.matsolve(pari_column_vector(errors))
         shapes = shapes - gauss
 
