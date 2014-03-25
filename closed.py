@@ -7,6 +7,7 @@ import snappy, phc
 from polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
 from real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
 
+
 def clean_complex(z, epsilon=1e-20):
     r, i = abs(z.real), abs(z.imag)
     if r < epsilon and i < epsilon:
@@ -43,7 +44,11 @@ class PHCGluingSolutionsOfClosed:
         
     def raw_solutions(self, max_err=1e-6):
         ans = []
-        for sol in self.system.solution_list():
+        try:
+            sols = self.system.solution_list()
+        except phc.PHCInternalAdaException:
+            return []
+        for sol in sols:
             if sol.err < max_err:
                 ans.append([clean_complex(z) for z in sol.point[:self.N]])
         return ans
@@ -51,7 +56,6 @@ class PHCGluingSolutionsOfClosed:
     def solutions(self, working_prec=230):
         psl2Rtilde, psl2R, su2, rest = [], [], [], []
         for sol in self.raw_solutions():
-            print sol
             rho = PSL2CRepOf3ManifoldGroup(self.manifold,
                             target_meridian_holonomy_arg=0,
                             rough_shapes=sol)
