@@ -29,6 +29,9 @@ test_line23="DT[obghhdIkMjogCnabELf]\tB6Q+AQQEBgUFBgYbG5yxThuNjQ==\t[[[5, -4], [
 test_line24="DT[obcldfJbmgalNKCOeHI]\tB+A9AgUDBAYEBQZsGzk5sTlyHg==\t[[[-5, 3], [-2, 1]]]"
 test_line25="DT[obcldEhknMJLbFGoIAc]\tCIT7AgYFBgcFBwcGLTYt5E6NbMZL\t[[[1, 4], [0, 1]]]"
 test_line26="DT[obdkefkhaocMdLbnIGj]\tB8E+AAQFBAUGBgaNTrGNbHKT4Q==\t[[[8, -3], [3, -1]]]"
+test_line27="DT[obdkeFGJLnHBKMCOIDa]\tCFHuAAIDBgYFBgcHjXLkGxvh5E5L\t[[[5, 3], [-2, -1]]]"
+
+test_line28="DT[obghhcfIjbMgNlodEAk]\tBqQPAgMFBAQFBbFseGOHh3I=\t[[[5, -4], [-1, 1]]]"
 
 
 def manifold_from_bytes_n_cobs(encoded_bytes, cobs):
@@ -56,8 +59,11 @@ def find_reps(line):
 #find_reps(test_line23)
 #find_reps(test_line24)
 #find_reps(test_line25)
-#find_reps(test_line26)
-T = taskdb.TaskDatabase('find_reps')
-T.run_function(find_reps, 50)
+#for i in range(100):
+#    find_reps(test_line27)
+
+find_reps(test_line28)
+#T = taskdb.TaskDatabase('find_reps_rest')
+#T.run_function(find_reps, 50)
 
 
