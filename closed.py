@@ -3,7 +3,7 @@ Using PHC to find solutions to the gluing equations for closed manifolds.
 """
 
 import os, sys, re
-import snappy, phc
+import snappy
 from polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
 from real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
 
@@ -32,17 +32,21 @@ class PHCGluingSolutionsOfClosed:
 
         manifold.set_peripheral_curves('fillings')
         self.manifold = manifold
-
         self.N = N = manifold.num_tetrahedra()
-        variables = ['X%s'%n for n in range(N)] + ['Y%s'%n for n in range(N)]
-        self.ring = phc.PolyRing(variables)
+        self.variables = ['X%s'%n for n in range(N)] + ['Y%s'%n for n in range(N)]
         self.equations = [self.rect_to_PHC(eqn) for eqn in
                           snappy.snap.shapes.enough_gluing_equations(manifold)]
         self.equations += ['X%s + Y%s - 1'%(n,n) for n in range(N)]
-        self.system = phc.PHCSystem(self.ring,
-                                    [phc.PHCPoly(self.ring, eqn) for eqn in self.equations])
+        self.phc_system = None
+        
         
     def raw_solutions(self, max_err=1e-6):
+        import phc
+        
+        if self.phc_system is None:
+            self.ring = phc.PolyRing(self.variables)        
+            self.system = phc.PHCSystem(self.ring,
+                                    [phc.PHCPoly(self.ring, eqn) for eqn in self.equations])
         ans = []
         try:
             sols = self.system.solution_list()
@@ -95,7 +99,34 @@ class PHCGluingSolutionsOfClosed:
         op = ' - ' if c == 1 else ' + '
         return '*'.join(left) + op + '*'.join(right)
 
-if __name__=='__main__':
-    M = snappy.Manifold('m004(1,2)')
-    ans = PHCGluingSolutionsOfClosed(M).solutions()
+class PHCGluingSolutionsOfClosedStandalone(
+        PHCGluingSolutionsOfClosed):
+    """
+    Uses command line PHC, connected by pipes, rather than
+    the CyPHC library.
+
+    Note: Uses PHC's blackbox solver mode, which is sometimes
+    inferior to the parameter choices made by CyPHC.  
+    """
+    def raw_solutions(self):
+        import sage.interfaces.phc as sage_phc
+        from sage.all import PolynomialRing, QQ
+        
+        vars = self.variables
+        R = PolynomialRing(QQ, vars)
+        x_vars = [R(x) for x in vars[:len(vars)/2]]
+        sols = sage_phc.phc.blackbox(map(R, self.equations), R)
+        sols_dicts = sage_phc.get_classified_solution_dicts(
+            sols.output_file_contents, R)
+        good_sols = sols_dicts['real'] + sols_dicts['complex']
+        ans = [ [clean_complex(complex(sol[x])) for x in x_vars]
+                for sol in good_sols]
+        return ans
     
+
+if __name__=='__main__':
+    M = snappy.Manifold('m094(3,2)')
+    ans1 = PHCGluingSolutionsOfClosed(M).solutions()
+    print map(len, ans1)
+    ans2 = PHCGluingSolutionsOfClosedStandalone(M).solutions()
+    print map(len, ans2)
