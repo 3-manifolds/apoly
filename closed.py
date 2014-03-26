@@ -2,7 +2,7 @@
 Using PHC to find solutions to the gluing equations for closed manifolds.
 """
 
-import os, sys, re
+import sys
 import snappy
 from polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
 from real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
@@ -122,11 +122,26 @@ class PHCGluingSolutionsOfClosedStandalone(
         ans = [ [clean_complex(complex(sol[x])) for x in x_vars]
                 for sol in good_sols]
         return ans
+
+class PHCGluingSolutionsOfClosedHack(
+        PHCGluingSolutionsOfClosed):
+    """
+    To avoid memory leaks and random PARI crashes, runs CyPHC
+    in a separate subprocess.
+    """
+    def raw_solutions(self):
+        import subprocess
+        args = [sys.executable, 'phc_hack.py', ','.join(self.variables)] + self.equations
+        P = subprocess.Popen(args, stdout=subprocess.PIPE)
+        return eval(P.stdout.read())
     
 
 if __name__=='__main__':
-    M = snappy.Manifold('m094(3,2)')
+    #M = snappy.Manifold('m094(3,2)')
+    M = snappy.Manifold('m004(1,2)')
     ans1 = PHCGluingSolutionsOfClosed(M).solutions()
     print map(len, ans1)
     ans2 = PHCGluingSolutionsOfClosedStandalone(M).solutions()
     print map(len, ans2)
+    ans3 = PHCGluingSolutionsOfClosedHack(M).solutions()
+    print map(len, ans3)
