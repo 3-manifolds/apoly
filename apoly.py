@@ -1320,7 +1320,7 @@ class Apoly:
        print 'shifts (old method): ', shifts
        return max(shifts)
 
-    # This is the new one
+    # This is the new one, which fails on 9_3!!!
     def find_shift(self, cutoff=0.1):
         """
         Decide how many negative powers of M occur in the Laurent

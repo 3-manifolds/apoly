@@ -52,7 +52,7 @@ def cone(L, C):
                 y = ymin if n == 0 else ymax
 #            y = 100*a if n == 0 else -100*a
             points.append(array([0, y]))
-    points.insert(2, array([xmax, y]))
+            points.insert(2, array([xmax, y]))
     vertices = array(points)
     p = Polygon(vertices, color='red', alpha=0.2, fill=True)
     L.plot.figure.axis.add_artist(p)
@@ -80,15 +80,15 @@ def load_data(name):
     """
     return pickle.load(bz2.BZ2File('lifters/' + name + '.obj.bz2'))
     
-def plot_data(name):
-    V = PECharVariety(name, radius=1.04)
+def plot_data(name, radius=1.04):
+    V = PECharVariety(name, radius=radius)
     V.show()
     L = SL2RLifter(V)
     P = L.show()
     draw_line(L, homological_longitude(snappy.Manifold(name)), color='green')
     try:
         C = Lcone(name)
-        cone(L, Lcone(name))
+        cone(L, C)
     except:
         pass
     if cusped_manifold_dict.has_key(name):
