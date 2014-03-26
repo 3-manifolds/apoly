@@ -85,10 +85,18 @@ def plot_data(name):
     V.show()
     L = SL2RLifter(V)
     P = L.show()
-    C = Lcone(name)
-    cone(L, Lcone(name))
     draw_line(L, homological_longitude(snappy.Manifold(name)), color='green')
-    return P, L
+    try:
+        C = Lcone(name)
+        cone(L, Lcone(name))
+    except:
+        pass
+    if cusped_manifold_dict.has_key(name):
+        for slope in cusped_manifold_dict[name].L_space_fillings:
+            draw_line(L, slope, color='red')
+        for slope in cusped_manifold_dict[name].non_L_space_fillings:
+            draw_line(L, slope, color='#A9F5F2')
+    return L
 
 
 def add_shifts(L, num_shifts):

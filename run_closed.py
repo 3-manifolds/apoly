@@ -33,18 +33,18 @@ test_line27="DT[obdkeFGJLnHBKMCOIDa]\tCFHuAAIDBgYFBgcHjXLkGxvh5E5L\t[[[5, 3], [-
 
 test_line28="DT[obghhcfIjbMgNlodEAk]\tBqQPAgMFBAQFBbFseGOHh3I=\t[[[5, -4], [-1, 1]]]"
 
-"""
-DT[obdkeFGJLmBOKCINaDH] CSX0AwABAwYIBwUHCAiNGx7hyZM5J7Hk        [[[-1, 4], [0, -1]]]
-DT[obejfdinKamJbLEHgoc] CaDtAwMFAgYHCAgHCAeT5HIbG4c5cths        [[[-3, -2], [-1, -1]]]
-DT[obghhDFKLOCgMNABJIE] Cdi4AwIDAgQGBgcICAjJbJOxxkvkyZON        [[[3, -7], [1, -2]]]
-DT[obdkefGiklnMdcoaHBj] CQZ7AwABBQQGBwUHCAhLThsbxjkeOeSN        [[[3, -4], [1, -1]]]
-DT[obdkefGiKlNmdcOahBJ] CQD/AwYFAwYHCAcICAecnDnJ5Hic4cZy        [[[-1, -3], [0, -1]]]
-DT[obdkefGIklNMDCoaHBj] CcGuAwADBAYFBgcICAiTY4dL2I3JLWy0        [[[3, -4], [1, -1]]]
-DT[obejfdjgkelbNchaOIM] CYLtAwAFAwQGBwYIBwiNYxtLxofYnEs5        [[[-3, 5], [1, -2]]]
-DT[obdkeGLINmKOJDBFCaH] CUr0AwACAwUIBwYIBwiNHpxyY5yHJ0uN        [[[3, -1], [1, 0]]]
-DT[obdkegmIaLkJDHbOncF] CaD1AwIFBgQHCAcHBgi05BvhTuQetHI5        [[[3, 2], [1, 1]]]
-DT[obdkefgiKnbjLcmOHad] CZDbAwIFAwYGBggHCAhLeCc2nHiNjeGT        [[[4, -5], [1, -1]]]
-DT[obdkeFGIKnBJLCOMHDa] CcKtAwAFBAMGBAcIBwhLTuTkTktOTkuT        [[[5, -2], [-2, 1]]]
+memoryleak_example="""\
+DT[obdkeFGJLmBOKCINaDH]\tCSX0AwABAwYIBwUHCAiNGx7hyZM5J7Hk\t[[[-1, 4], [0, -1]]]
+DT[obejfdinKamJbLEHgoc]\tCaDtAwMFAgYHCAgHCAeT5HIbG4c5cths\t[[[-3, -2], [-1, -1]]]
+DT[obghhDFKLOCgMNABJIE]\tCdi4AwIDAgQGBgcICAjJbJOxxkvkyZON\t[[[3, -7], [1, -2]]]
+DT[obdkefGiklnMdcoaHBj]\tCQZ7AwABBQQGBwUHCAhLThsbxjkeOeSN\t[[[3, -4], [1, -1]]]
+DT[obdkefGiKlNmdcOahBJ]\tCQD/AwYFAwYHCAcICAecnDnJ5Hic4cZy\t[[[-1, -3], [0, -1]]]
+DT[obdkefGIklNMDCoaHBj]\tCcGuAwADBAYFBgcICAiTY4dL2I3JLWy0\t[[[3, -4], [1, -1]]]
+DT[obejfdjgkelbNchaOIM]\tCYLtAwAFAwQGBwYIBwiNYxtLxofYnEs5\t[[[-3, 5], [1, -2]]]
+DT[obdkeGLINmKOJDBFCaH]\tCUr0AwACAwUIBwYIBwiNHpxyY5yHJ0uN\t[[[3, -1], [1, 0]]]
+DT[obdkegmIaLkJDHbOncF]\tCaD1AwIFBgQHCAcHBgi05BvhTuQetHI5\t[[[3, 2], [1, 1]]]
+DT[obdkefgiKnbjLcmOHad]\tCZDbAwIFAwYGBggHCAhLeCc2nHiNjeGT\t[[[4, -5], [1, -1]]]
+DT[obdkeFGIKnBJLCOMHDa]\tCcKtAwAFBAMGBAcIBwhLTuTkTktOTkuT\t[[[5, -2], [-2, 1]]]
 """
 
 
@@ -67,6 +67,11 @@ def find_reps(line):
     new_data = [counts] + list(ans)
     return line + '\t' + '\t'.join(map(repr, new_data)), True
 
+def test_memory_leak():
+    for line in memoryleak_example.split('\n'):
+        find_reps(line)
+    
+
 #find_reps(test_line20)
 #find_reps(test_line21)
 #find_reps(test_line22)
@@ -79,9 +84,8 @@ def find_reps(line):
 #find_reps(test_line28)
 
 if __name__ == '__main__':
-    n = int(sys.argv[1]) % 10
-    T = taskdb.TaskDatabase('find_reps_%s' % n)
-    print T
+    #n = int(sys.argv[1]) % 10
+    #T = taskdb.TaskDatabase('find_reps_%s' % n)
+    #print T
     #T.run_function(find_reps, 50)
-
-
+    test_memory_leak()
