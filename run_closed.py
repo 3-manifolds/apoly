@@ -1,5 +1,15 @@
-import snappy, closed, taskdb, base64, sys
+#! /bin/env sage-python
+#
+#SBATCH --partition e
+#SBATCH --tasks=1
+#SBATCH --mem-per-cpu=4096
+#SBATCH --nice=10000
+#SBATCH --time=7-00:00
+#SBATCH --output=slurm_out/%j
+#SBATCH --error=slurm_out/%j
 
+import taskdb
+import snappy, closed, base64, sys
 
 test_line0 = "DT[obejfgjMkeaonldbCih]\tAg4BAQF4G9I=\t[[[21, -4], [-5, 1]]]"
 test_line1 = "L13n5884\tAzoBAQICNpwejQ==\t[[[5, -1], [1, 0]]]"
@@ -47,7 +57,6 @@ def find_reps(line):
     name, encoded_bytes, cobs = line.split('\t')
     M = manifold_from_bytes_n_cobs(encoded_bytes, eval(cobs))
     gluing_sols = closed.PHCGluingSolutionsOfClosed(M)
-    return gluing_sols
     ans = gluing_sols.solutions()
     counts = map(len, ans)
     counts.append(sum(counts))
@@ -57,7 +66,5 @@ def find_reps(line):
 #find_reps(test_line1)
 
 if __name__ == '__main__':
-    n = int(sys.argv[1]) % 10
-    T = taskdb.TaskDatabase('find_reps_%s' % n)
-    print T
+    T = taskdb.TaskDatabase('knot_reps')
     T.run_function(find_reps, 50)
