@@ -131,9 +131,14 @@ class PHCGluingSolutionsOfClosedHack(
     """
     def raw_solutions(self):
         import subprocess
-        args = [sys.executable, 'phc_hack.py', ','.join(self.variables)] + self.equations
+        args = [sys.executable, 'phc_hack.py',
+                ','.join(self.variables)] + self.equations
         P = subprocess.Popen(args, stdout=subprocess.PIPE)
-        return eval(P.stdout.read())
+        try:
+            ans = eval(P.stdout.read())
+        except:
+            ans = []
+        return ans
     
 
 if __name__=='__main__':

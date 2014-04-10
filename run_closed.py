@@ -40,6 +40,7 @@ test_line25="DT[obcldEhknMJLbFGoIAc]\tCIT7AgYFBgcFBwcGLTYt5E6NbMZL\t[[[1, 4], [0
 test_line26="DT[obdkefkhaocMdLbnIGj]\tB8E+AAQFBAUGBgaNTrGNbHKT4Q==\t[[[8, -3], [3, -1]]]"
 test_line27="DT[obdkeFGJLnHBKMCOIDa]\tCFHuAAIDBgYFBgcHjXLkGxvh5E5L\t[[[5, 3], [-2, -1]]]"
 test_line28="DT[obghhcfIjbMgNlodEAk]\tBqQPAgMFBAQFBbFseGOHh3I=\t[[[5, -4], [-1, 1]]]"
+test_line29="15n135299\tDDCj3wMCBAQHCAoKCggJCwtsOeE5HrTJ0rHhThse\t[[[1, 3], [0, 1]]]"
 
 
 
@@ -56,14 +57,14 @@ def find_reps(line):
     print line
     name, encoded_bytes, cobs = line.split('\t')
     M = manifold_from_bytes_n_cobs(encoded_bytes, eval(cobs))
-    gluing_sols = closed.PHCGluingSolutionsOfClosed(M)
+    gluing_sols = closed.PHCGluingSolutionsOfClosedHack(M)
     ans = gluing_sols.solutions()
     counts = map(len, ans)
     counts.append(sum(counts))
     new_data = [counts] + list(ans)
     return line + '\t' + '\t'.join(map(repr, new_data)), True
 
-#find_reps(test_line1)
+#find_reps(test_line29)
 
 if __name__ == '__main__':
     T = taskdb.TaskDatabase('knot_reps')
