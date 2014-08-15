@@ -20,6 +20,7 @@ except ImportError:
 from phc import *
 import snappy
 snappy.SnapPy.matrix = matrix
+snappy.SnapPyHP.matrix = matrix
 from snappy import *
 from spherogram.graphs import Graph
 
@@ -27,7 +28,7 @@ from spherogram.graphs import Graph
 from plot import MatplotPlot as Plot
 global_linewidth=1
 
-complex_array = numpy.vectorize(complex)
+real_array = numpy.vectorize(float)
 
 # Constants for Newton method
 RESIDUAL_BOUND = 1.0E-14
@@ -824,7 +825,7 @@ class Holonomizer:
 #                print 'trace not in [-2,2]'
                 return False
         # Get O31 matrix generators
-        o31matrices = [complex_array(self.O31(g, shape)) for g in gens]
+        o31matrices = [real_array(array(self.O31(g, shape))) for g in gens]
         # Take the first two
         A, B = o31matrices[:2]
         # find their axes
