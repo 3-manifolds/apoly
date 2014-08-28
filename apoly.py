@@ -1091,12 +1091,19 @@ class PECharVariety:
                 cap = [level.pop(0), level.pop(distances.argmin())]
                 cap.sort(key=lambda a : a[0].real)
                 left, right = cap
-                if right[0].imag > .01:
-                    #print 'cap: ', left[0], right[0]
-                    right.insert(0, left[0])
-                self.curve_graph.add_edge(
-                    self.arcs.index(left),
-                    self.arcs.index(right))
+                if right[0].imag > .05:
+                    join = True
+                    if right[1].real > right[0].real and left[1].real < left[0].real:
+                        right.insert(0, left[0])
+                    elif right[1].real < right[0].real and left[1].real > left[0].real:
+                        right.insert(0, 1.0 + left[0].imag*1j)
+                        left.insert(0, 0.0 + left[0].imag*1j)
+                    else:
+                        join = False
+                    if join:
+                        self.curve_graph.add_edge(
+                            self.arcs.index(left),
+                            self.arcs.index(right))
         # cups
         arcs = list(self.arcs)
         arcs.sort(key=lambda x : x[-1].imag)
@@ -1111,11 +1118,19 @@ class PECharVariety:
                 cup = [level.pop(0), level.pop(distances.argmin())]
                 cup.sort(key=lambda a : a[-1].real)
                 left, right = cup
-                if right[-1].imag < 0.49:
-                    right.append(left[-1])
-                self.curve_graph.add_edge(
-                    self.arcs.index(left),
-                    self.arcs.index(right))                 
+                if right[-1].imag < 0.48:
+                    join = True
+                    if right[-2].real > right[-1].real and left[-2].real < left[-1].real:
+                        right.append(left[-1])
+                    elif right[-2].real < right[-1].real and left[-2].real > left[-1].real:
+                        right.append(1.0 + left[-1].imag*1j)
+                        left.append(0.0 + left[-1].imag*1j)
+                    else:
+                        join = False
+                    if join:
+                        self.curve_graph.add_edge(
+                            self.arcs.index(left),
+                            self.arcs.index(right))                 
         return
 
     def XXXadd_extrema(self):
