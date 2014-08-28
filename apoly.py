@@ -417,7 +417,21 @@ class Fiber:
             if (s.t != 1.0 or self.shapes[n].is_degenerate()):
                 result.append(n)
         return result
-    
+
+    def permutation(self, other):
+        """
+        return a list of pairs (m, n) where self.shapes[m] is
+        closest to other.shapes[n].
+        """
+        result = []
+        target = set(range(len(other.shapes)))
+        for m, shape in enumerate(self.shapes):
+            dist, n = min([(shape.dist(other.shapes[k]), k,)
+                           for k in target])
+            result.append( (m, n) )
+            target.remove(n)
+        return result
+
 class PHCFibrator:
     """
     A factory for Fibers, computed by PHC or by a GluingSystem
@@ -915,6 +929,12 @@ def solve_mod2_system(the_matrix,rhs):
         i -= 1
     return S
 
+class PEArc(list):
+    """
+    A list of pillowcase points lying on an arc of the PECharVariety.
+    Subclasses to allow additional attributes.
+    """
+
 class PECharVariety:
     def __init__(self, mfld, order=128, radius=1.02,
                  holonomizer=None, base_dir='base_fibers', hint_dir='hints'):
@@ -946,7 +966,7 @@ class PECharVariety:
         # Construct the subarcs which lie on the unit torus
         arcs = []
         for track in self.holonomizer.T_longitude_evs:
-            arc = [] 
+            arc = []
             for n, ev in enumerate(track):
                 if (0.99999 < abs(ev) < 1.00001):
                     arc.append( (log(ev).imag/(2*pi))%1.0 + M_args[m]*1j )
@@ -980,7 +1000,7 @@ class PECharVariety:
         delta_M = -1.0/self.order
         M_args = 0.5 * ( arange(self.order, dtype=float64)*delta_M % 1.0 )
         for m, track in enumerate(self.holonomizer.T_longitude_evs):
-            arc, info = [], []
+            arc, info = PEArc(), []
             for n, ev in track:
                 su2_ok = True
                 if su2_only:
@@ -988,56 +1008,44 @@ class PECharVariety:
                         su2_ok = H.in_SU2(H.T_fibers[n].shapes[m])
                     except:
                         #For now, just throw it in so we can look at it.
+                        print 'Exception in SU_2 test.'
                         su2_ok = True
                 if (0.99999 < abs(ev) < 1.00001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
-                    if len(arc)>1:
+                    if len(arc)>0:
                         last_L = arc[-1].real
                         if last_L > 0.8 and L < 0.2:   # L became > 1
                             length = 1.0 - last_L + L 
                             interp = ((1.0-last_L)*M_args[n] + L*M_args[n-1])/length
-                            arc += [ 1.0 + interp*1j,  None,  0.0 + interp*1j]
+                            for p in [ 1.0 + interp*1j,  None,  0.0 + interp*1j]:
+                                arc.append(p)
                         elif last_L < 0.2 and L > 0.8: # L became < 1
                             length = last_L + 1.0 - L 
                             interp = (last_L*M_args[n] + (1.0 - L)*M_args[n-1])/length
-                            arc += [0.0 + interp*1j , None, 1.0 + interp*1j] 
+                            for p in [0.0 + interp*1j , None, 1.0 + interp*1j]:
+                                arc.append(p)
                     arc.append( L + 1j*(M_args[n]) )
                     info.append( (m,n) )
                 else:
                     if len(arc) > 1:
+                        m, n = arc.first_info = info[0]
+                        arc.first_shape = self.holonomizer.T_fibers[n].shapes[m]
+                        m, n = arc.last_info = info[-1]
+                        arc.last_shape = self.holonomizer.T_fibers[n].shapes[m]
                         self.arcs.append(arc)
                         self.arc_info.append(info)
-                    arc = []
+                    arc = PEArc()
                     info = []
             if arc:
+                # Dumb repetition
+                m, n = arc.first_info = info[0]
+                arc.first_shape = self.holonomizer.T_fibers[n].shapes[m]
+                m, n = arc.last_info = info[-1]
+                arc.last_shape = self.holonomizer.T_fibers[n].shapes[m]
                 self.arcs.append(arc)
                 self.arc_info.append(info)
-        arcs = list(self.arcs)
-        curve_graph = Graph([], range(len(self.arcs)))
-        # add caps
-        arcs.sort(key=lambda x : x[0].imag, reverse=True)
-        n = len(arcs) - 1
-        while n > 0:
-            if ( arcs[n][0].imag == arcs[n-1][0].imag
-                 and abs(arcs[n][0].real - arcs[n-1][0].real) > 0.01 ):
-                arcs[n].insert(0, arcs[n-1][0])
-                curve_graph.add_edge(
-                    self.arcs.index(arcs[n]),
-                    self.arcs.index(arcs[n-1]))                 
-                n -= 1
-            n -= 1
-        # add cups
-        arcs.sort(key=lambda x : x[-1].imag)
-        n = len(arcs) - 1
-        while n > 0:
-            if ( arcs[n][-1].imag == arcs[n-1][-1].imag > 0.01
-                 and abs(arcs[n][-1].real - arcs[n-1][-1].real) > 0.01 ):
-                arcs[n].append(arcs[n-1][-1])
-                curve_graph.add_edge(
-                    self.arcs.index(arcs[n]),
-                    self.arcs.index(arcs[n-1]))                 
-                n -= 1
-            n -= 1
+        self.curve_graph = curve_graph = Graph([], range(len(self.arcs)))
+        self.add_extrema()
         # build the color dict
         self.colors = {}
         for n, component in enumerate(curve_graph.components()):
@@ -1067,9 +1075,78 @@ class PECharVariety:
                         arc[-1] = arc[-1] + 1.0
             except TypeError:
                 pass
+
+    def add_extrema(self):
+        arcs = list(self.arcs)
+        # caps
+        arcs.sort(key=lambda x : x[0].imag, reverse=True)
+        while arcs:
+            arc = arcs.pop(0)
+            level = [arc]
+            while arcs and arc[0].imag == arcs[0][0].imag:
+                    level.append(arcs.pop(0))
+            while len(level) > 1:
+                distances = array([level[0].first_shape.dist(a.first_shape)
+                             for a in level[1:]])
+                cap = [level.pop(0), level.pop(distances.argmin())]
+                cap.sort(key=lambda a : a[0].real)
+                left, right = cap
+                if right[0].imag > .01:
+                    #print 'cap: ', left[0], right[0]
+                    right.insert(0, left[0])
+                self.curve_graph.add_edge(
+                    self.arcs.index(left),
+                    self.arcs.index(right))
+        # cups
+        arcs = list(self.arcs)
+        arcs.sort(key=lambda x : x[-1].imag)
+        while arcs:
+            arc = arcs.pop(0)
+            level = [arc]
+            while arcs and arc[-1].imag == arcs[0][-1].imag:
+                    level.append(arcs.pop(0))
+            while len(level) > 1:
+                distances = array([level[0].last_shape.dist(a.last_shape)
+                             for a in level[1:]])
+                cup = [level.pop(0), level.pop(distances.argmin())]
+                cup.sort(key=lambda a : a[-1].real)
+                left, right = cup
+                if right[-1].imag < 0.49:
+                    right.append(left[-1])
+                self.curve_graph.add_edge(
+                    self.arcs.index(left),
+                    self.arcs.index(right))                 
+        return
+
+    def XXXadd_extrema(self):
+        arcs = list(self.arcs)
+        # add caps
+        arcs.sort(key=lambda x : x[0].imag, reverse=True)
+        n = len(arcs) - 1
+        while n > 0:
+            if ( arcs[n][0].imag == arcs[n-1][0].imag
+                 and abs(arcs[n][0].real - arcs[n-1][0].real) > 0.01 ):
+                arcs[n].insert(0, arcs[n-1][0])
+                self.curve_graph.add_edge(
+                    self.arcs.index(arcs[n]),
+                    self.arcs.index(arcs[n-1]))                 
+                n -= 1
+            n -= 1
+        # add cups
+        arcs.sort(key=lambda x : x[-1].imag)
+        n = len(arcs) - 1
+        while n > 0:
+            if ( arcs[n][-1].imag == arcs[n-1][-1].imag > 0.01
+                 and abs(arcs[n][-1].real - arcs[n-1][-1].real) > 0.01 ):
+                arcs[n].append(arcs[n-1][-1])
+                self.curve_graph.add_edge(
+                    self.arcs.index(arcs[n]),
+                    self.arcs.index(arcs[n-1]))                 
+                n -= 1
+            n -= 1
  
     def show(self, su2_only=False):
-        self.build_arcs( su2_only)
+        self.build_arcs(su2_only)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
         Plot(self.arcs,
              limits=((0.0, 1.0), (0.0, 0.5)),
