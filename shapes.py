@@ -48,7 +48,7 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
     target_espilon = float_to_pari(10.0, working_prec)**-dec_prec
     det_epsilon = float_to_pari(10.0, working_prec)**-(dec_prec//10)
     
-    init_shapes = pari_column_vector( [complex_to_pari(z, working_prec) for z in manifold.tetrahedra_shapes('rect')] )
+    init_shapes = pari_column_vector( [sage_complex_to_pari(z, working_prec) for z in manifold.tetrahedra_shapes('rect')] )
 
 
     manifold = manifold.copy()
@@ -101,11 +101,8 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
 
 if __name__ == '__main__':
     import snappy
+    M = snappy.Manifold('m071(0,0)')
+    polished_tetrahedra_shapes(M,0, bits_prec=1000)
     M = snappy.Manifold('m071(7,0)')
-    print polished_tetrahedra_shapes(M, (2*CC.pi()/7)*CC.gen(), bits_prec=10000)
-    #M = snappy.Manifold('m071(0,0)')
-    #print polished_tetrahedra_shapes(M,0, bits_prec=100)
-
-    
-
+    polished_tetrahedra_shapes(M, 2*CC.pi()/7, bits_prec=10000)
     
