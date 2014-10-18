@@ -18,8 +18,8 @@ matplotlib, and then do
   echo 'macosx=false' >> setup.cfg
   python setup.py install
 
-Alternatively use the patched spkg (which has a modified 
-make-setup-config.py file at the top leve ) available at  http://dunfield.info/temp/matplotlib-1.2.1.spkg
+Also, if one has freetype or libpng installed via brew, one should temporarily
+unlink them to avoid conflicting with Sage's internal version.  
 
 Note that the TkAgg backend will be compiled against one's current
 version of Tk, which might not be the one that Sage is linked against.
