@@ -273,7 +273,9 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         D = rho.coboundary_1_matrix()[:rel_cutoff]
         M = matrix(ZZ, [euler_cocycle] + D.columns())
         k = M.left_kernel().basis()[0]
-        assert k[0] == 1
+        if k[0] != 1:
+            print "Warning, couldn't lift to cusped manifold"
+            return 
         shifts = (-k)[1:]
         good_lifts = [euler.PSL2RtildeElement(rho(g), s)
                       for g, s in zip(rho.generators(), shifts)]
