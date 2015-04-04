@@ -74,6 +74,8 @@ class SL2RLifter:
             for sn, rho in arc:
                 meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
                 rho_til = rho.lift_on_cusped_manifold()
+                if rho_til is None:
+                    continue 
                 try:
                     P = ( float(translation_amount(rho_til(meridian))),
                           float(translation_amount(rho_til(longitude))) )
