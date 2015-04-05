@@ -1,7 +1,8 @@
 Overview
 ========
 
-Development code for studying A-polynomials and other representations of 3-manifold groups, using SnapPy, phc, and Sage.
+Development code for studying A-polynomials and other representations
+of 3-manifold groups, using SnapPy, phc, and Sage.
 
 License
 =======
