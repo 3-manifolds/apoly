@@ -1,8 +1,8 @@
 from sage.all import *
-from polish_reps import (PSL2CRepOf3ManifoldGroup, polished_holonomy,
+from .polish_reps import (PSL2CRepOf3ManifoldGroup, polished_holonomy,
                          apply_representation, GL2C_inverse, SL2C_inverse,
                          CheckRepresentationFailed, conjugacy_classes_in_Fn)
-import euler
+from . import euler
 
 class CouldNotConjugateIntoPSL2R(Exception):
     pass
@@ -176,10 +176,18 @@ def normalizer_wrt_target_meridian_holonomy(meridian_matrix, target):
         
     
     
-
-
-    
 class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
+    """
+    >>> import snappy
+    >>> M = snappy.Manifold('m004(3,2)')
+    >>> M.set_peripheral_curves('fillings')
+    >>> shapes = [0.48886560625734599, 0.25766090533555303]
+    >>> rho = PSL2RRepOf3ManifoldGroup(M, 0, shapes, 250, [False, True, False])
+    >>> rho
+    <m004(1,0): [0.48887, 0.25766]>
+    >>> rho.representation_lifts()
+    True
+    """
     def __init__(self, rep_or_manifold,
                  target_meridian_holonomy_arg=None,
                  rough_shapes=None,
@@ -284,10 +292,13 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
 
                 
     def __repr__(self):
-        shapes = "[" + ",".join(["%s" % z for z in self.rough_shapes]) + "]"
-        traces = "[" + ",".join(["%s" % z for z in self.trace_field_generators()]) + "]"
-        return "<%s" % self.manifold + ": " + traces + ">"
+        shapes = "[" + ", ".join(["%.5g" % z for z in self.rough_shapes]) + "]"
+        traces = "[" + ", ".join(["%.5g" % z for z in self.trace_field_generators()]) + "]"
+        return "<%s" % self.manifold + ": " + shapes + ">"
 
 
 
 
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()

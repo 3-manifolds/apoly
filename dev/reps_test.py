@@ -1,5 +1,8 @@
+import sys
+sys.path.append('..')
 import snappy
-from real_reps import PSL2RRepOf3ManifoldGroup, shift_of_central
+from manifold_reps import PSL2RRepOf3ManifoldGroup
+from manifold_reps.real_reps import shift_of_central
 
 sample_data = [
                ('m004(3,2)', [0.48886560625734599, 0.25766090533555303]), 

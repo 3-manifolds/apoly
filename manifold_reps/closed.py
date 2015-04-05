@@ -4,9 +4,9 @@ Using PHC to find solutions to the gluing equations for closed manifolds.
 
 import sys
 import snappy
-from polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
-from real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
-
+from .polish_reps import PSL2CRepOf3ManifoldGroup, CheckRepresentationFailed
+from .real_reps import PSL2RRepOf3ManifoldGroup, CouldNotConjugateIntoPSL2R
+from . import phc_hack
 
 def clean_complex(z, epsilon=1e-20):
     r, i = abs(z.real), abs(z.imag)
@@ -22,6 +22,12 @@ def clean_complex(z, epsilon=1e-20):
     return ans
 
 class PHCGluingSolutionsOfClosed:
+    """
+    >>> M = snappy.Manifold('m004(1,2)')
+    >>> ans = PHCGluingSolutionsOfClosed(M).solutions()
+    >>> map(len, ans)
+    [2, 0, 8, 4]
+    """
     def __init__(self, manifold):
         if isinstance(manifold, str):
             manifold = snappy.Manifold(manifold)
@@ -106,7 +112,12 @@ class PHCGluingSolutionsOfClosedStandalone(
     the CyPHC library.
 
     Note: Uses PHC's blackbox solver mode, which is sometimes
-    inferior to the parameter choices made by CyPHC.  
+    inferior to the parameter choices made by CyPHC.
+
+    >>> M = snappy.Manifold('m004(1,2)')
+    >>> ans = PHCGluingSolutionsOfClosedStandalone(M).solutions()
+    >>> map(len, ans)
+    [2, 0, 8, 4]
     """
     def raw_solutions(self):
         import sage.interfaces.phc as sage_phc
@@ -128,10 +139,15 @@ class PHCGluingSolutionsOfClosedHack(
     """
     To avoid memory leaks and random PARI crashes, runs CyPHC
     in a separate subprocess.
+
+    >>> M = snappy.Manifold('m004(1,2)')
+    >>> ans = PHCGluingSolutionsOfClosedHack(M).solutions()
+    >>> map(len, ans)
+    [2, 0, 8, 4]
     """
     def raw_solutions(self):
         import subprocess
-        args = [sys.executable, 'phc_hack.py',
+        args = [sys.executable, phc_hack.__file__,
                 ','.join(self.variables)] + self.equations
         P = subprocess.Popen(args, stdout=subprocess.PIPE)
         try:
@@ -142,11 +158,5 @@ class PHCGluingSolutionsOfClosedHack(
     
 
 if __name__=='__main__':
-    #M = snappy.Manifold('m094(3,2)')
-    M = snappy.Manifold('m004(1,2)')
-    ans1 = PHCGluingSolutionsOfClosed(M).solutions()
-    print map(len, ans1)
-    ans2 = PHCGluingSolutionsOfClosedStandalone(M).solutions()
-    print map(len, ans2)
-    ans3 = PHCGluingSolutionsOfClosedHack(M).solutions()
-    print map(len, ans3)
+    import doctest
+    doctest.testmod()

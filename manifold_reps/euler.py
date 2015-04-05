@@ -164,10 +164,6 @@ class PSL2RtildeElement:
     def is_central(self):
         return is_almost_identity(self.A)
 
-#RR = RealField(100)
-#A = matrix(RR, [[1,2],[-3,-5]])
-#At = PSL2RtildeElement(A, 0)
-#Ait = PSL2RtildeElement(SL2_inverse(A), 0)
 
 def thurston_cocycle_of_homs(f1, f2, b, samples=3):
     return orientation(b, f1*b, (f1*f2)*b)

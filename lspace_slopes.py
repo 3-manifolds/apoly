@@ -1,5 +1,5 @@
 from sage.all import *
-from data import cusped_manifold_dict
+from census_data import cusped_manifold_dict
 import snappy
 from snappy.snap.nsagetools import homological_longitude
 
