@@ -1,3 +1,4 @@
+import snappy
 from snappy.snap.shapes import (pari, gen, float_to_pari, complex_to_pari,
                                 pari_column_vector, prec_bits_to_dec)
 from snappy.snap.shapes import (infinity_norm, pari_matrix, pari_vector_to_list,
@@ -37,7 +38,12 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
                 dec_prec=None, bits_prec=200, ignore_solution_type=False):
     """
     Refines the current solution to the gluing equations to one with
-    the specified accuracy.  
+    the specified accuracy.
+
+    >>> M = snappy.Manifold('m071(0,0)')
+    >>> alpha = polished_tetrahedra_shapes(M, 0, bits_prec=500)
+    >>> M = snappy.Manifold('m071(7,0)')
+    >>> beta = polished_tetrahedra_shapes(M, 2*CC.pi()/7, bits_prec=1000)
     """
 
     if dec_prec is None:
@@ -73,7 +79,8 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
         if infinity_norm(errors) < target_espilon:
             break
 
-        derivative = [ [  eqn[0][i]/z  - eqn[1][i]/(1 - z)  for i, z in enumerate(pari_vector_to_list(shapes))] for eqn in eqns]
+        derivative = [ [  eqn[0][i]/z  - eqn[1][i]/(1 - z)
+                          for i, z in enumerate(pari_vector_to_list(shapes))] for eqn in eqns]
         derivative[-1] = [ target*x for x in derivative[-1] ]
         derivative = pari_matrix(derivative)
 
@@ -100,9 +107,5 @@ def polished_tetrahedra_shapes(manifold, target_meridian_holonomy_arg,
 
 
 if __name__ == '__main__':
-    import snappy
-    M = snappy.Manifold('m071(0,0)')
-    polished_tetrahedra_shapes(M,0, bits_prec=1000)
-    M = snappy.Manifold('m071(7,0)')
-    polished_tetrahedra_shapes(M, 2*CC.pi()/7, bits_prec=10000)
-    
+    import doctest
+    doctest.testmod()

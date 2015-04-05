@@ -1,4 +1,5 @@
-from sage.all import vector, matrix, MatrixSpace, ZZ, RR, RealField, prod, PolynomialRing
+from sage.all import (vector, matrix, MatrixSpace, ZZ, RR, CC,
+                      RealField, ComplexField, prod, PolynomialRing)
 import sys, os, re, tempfile, random, string
 from shapes import polished_tetrahedra_shapes, GoodShapesNotFound
 
@@ -92,11 +93,32 @@ def polished_holonomy(M, target_meridian_holonomy_arg,
     return PG
 
 
-
+def format_complex(z, digits=5):
+    conv = '%.' + repr(digits) + 'g'
+    ten = RR(10)
+    z = CC(z)
+    real = conv % z.real()
+    
+    if abs(z.imag()) < ten**-(digits):
+        return real
+    if abs(z.real()) < ten**-(digits):
+        return conv % z.imag() + 'I'
+    im = conv % float(abs(z.imag())) + 'I'
+    conn = '-' if z.imag() < 0 else '+'
+    return real + conn + im
     
 class PSL2CRepOf3ManifoldGroup:
     """
     Throughout precision is in bits.
+
+    >>> import snappy
+    >>> M = snappy.Manifold('m004')
+    >>> rho = PSL2CRepOf3ManifoldGroup(M, 0, precision=100)
+    >>> rho
+    <m004(0,0): [0.5+0.86603I, 0.5+0.86603I]>
+    >>> G = rho.polished_holonomy()
+    >>> float(G('ab').trace().real())
+    -2.0
     """
     def __init__(self, manifold,
                  target_meridian_holonomy_arg=None,
@@ -104,9 +126,12 @@ class PSL2CRepOf3ManifoldGroup:
                  precision=100,
                  fundamental_group_args=tuple() ):
         self.precision = precision
-        self.manifold, self.rough_shapes = manifold.copy(), rough_shapes
+        self.manifold = manifold.copy()
         if rough_shapes != None:
-            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes) 
+            self.manifold.set_tetrahedra_shapes(rough_shapes, rough_shapes)
+        else:
+            rough_shapes = manifold.tetrahedra_shapes('rect')
+        self.rough_shapes = rough_shapes
         if target_meridian_holonomy_arg is None:
             CC = ComplexField()
             holonomy = CC(complex(manifold.cusp_info('holonomies')[0][0]))
@@ -116,7 +141,7 @@ class PSL2CRepOf3ManifoldGroup:
         self._cache = {}
 
     def __repr__(self):
-        return "<%s" % self.manifold + ": [" + ",".join(["%s" % z for z in self.rough_shapes]) + "]>"
+        return "<%s" % self.manifold + ": [" + ", ".join([format_complex(z) % z for z in self.rough_shapes]) + "]>"
 
     def _update_precision(self, precision):
         if precision != None:
@@ -230,3 +255,8 @@ class PSL2CRepOf3ManifoldGroup:
 
     def __call__(self, word):
         return self.polished_holonomy().SL2C(word)
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
+    

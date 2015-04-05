@@ -1,6 +1,6 @@
-from apoly import *
-from sage.all import *
-from real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
+from apoly import Plot
+from sage.all import RealField, ComplexField, log, pi
+from manifold_reps.real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
 
 def in_SL2R(H, f, s):
     shape = H.T_fibers[f].shapes[s]
@@ -52,7 +52,6 @@ class SL2RLifter:
             reps = []
             for sn,  S in arc:
                 s, n = sn
-                target1 = log(self.holonomizer.T_fibers[n].H_meridian).imag()
                 target = -2*RR(pi)*RR(n)/RR(128)
                 rho = PSL2RRepOf3ManifoldGroup(
                     self.holonomizer.manifold,

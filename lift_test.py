@@ -1,12 +1,11 @@
-import euler, real_reps
 import cPickle as pickle
 import bz2, glob, os
 from apoly import *
 from lift_picture import *
 from lspace_slopes import compute_L_space_range as Lcone
-from data import cusped_manifold_dict
+from census_data import cusped_manifold_dict
 import snappy
-from snappy.snap.nsagetools import MapToFreeAbelianization, homological_longitude
+from snappy.snap.nsagetools import MapToFreeAbelianization
 from matplotlib.patches import Polygon
 
 def draw_line(L, curve_on_torus, **kwargs):
@@ -85,7 +84,7 @@ def plot_data(name, radius=1.04):
     V.show()
     L = SL2RLifter(V)
     P = L.show()
-    draw_line(L, homological_longitude(snappy.Manifold(name)), color='green')
+    draw_line(L, snappy.Manifold(name).homological_longitude(), color='green')
     try:
         C = Lcone(name)
         cone(L, C)

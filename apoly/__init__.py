@@ -40,7 +40,6 @@ try:
     M,L = polygens(QQ, 'M,L')
     t = polygen(QQ, 't')
     z = polygen(CC, 'z')
-    from alexander import alexander_polynomial
     got_sage = True
 except:
     pass
