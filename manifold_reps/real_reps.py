@@ -290,15 +290,6 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         rho_til= euler.LiftedFreeGroupRep(rho, good_lifts)
         return rho_til
 
-                
-    def __repr__(self):
-        shapes = "[" + ", ".join(["%.5g" % z for z in self.rough_shapes]) + "]"
-        traces = "[" + ", ".join(["%.5g" % z for z in self.trace_field_generators()]) + "]"
-        return "<%s" % self.manifold + ": " + shapes + ">"
-
-
-
-
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
