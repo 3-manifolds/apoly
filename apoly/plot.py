@@ -1,4 +1,4 @@
-import time, sys, os, Tkinter, numpy, math
+import time, sys, os, Tkinter, numpy, math, collections
 from subprocess import Popen, PIPE
 try:
     from tkplot import MatplotFigure, Tk, ttk
@@ -133,7 +133,7 @@ class MatplotPlot(Plot):
         self.figure = MF = MatplotFigure(add_subplot=False)
         MF.axis = axis = MF.figure.add_axes( [0.07, 0.07, 0.8, 0.9] )
         self.arcs = []
-        self.arc_vars = dict()
+        self.arc_vars = collections.OrderedDict()
         groups = dict()
         for i, data in enumerate(self.data):
             color = self.color_dict.get(i, i)
