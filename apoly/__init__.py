@@ -1011,7 +1011,7 @@ class PECharVariety:
                         su2_ok = True
                 if (0.99999 < abs(ev) < 1.00001) and su2_ok:
                     L = (log(ev).imag/(2*pi))%1.0
-                    if len(arc)>0:
+                    if len(arc)>2:  # don't do this near the corners.
                         last_L = arc[-1].real
                         if last_L > 0.8 and L < 0.2:   # L became > 1
                             length = 1.0 - last_L + L 
@@ -1090,7 +1090,7 @@ class PECharVariety:
                 cap = [level.pop(0), level.pop(distances.argmin())]
                 cap.sort(key=lambda a : a[0].real)
                 left, right = cap
-                if right[0].imag > .05:
+                if .05 < right[0].imag > .45:
                     join = True
                     if right[1].real > right[0].real and left[1].real < left[0].real:
                         right.insert(0, left[0])
@@ -1117,7 +1117,7 @@ class PECharVariety:
                 cup = [level.pop(0), level.pop(distances.argmin())]
                 cup.sort(key=lambda a : a[-1].real)
                 left, right = cup
-                if right[-1].imag < 0.48:
+                if 0.05 < right[-1].imag < 0.45:
                     join = True
                     if right[-2].real > right[-1].real and left[-2].real < left[-1].real:
                         right.append(left[-1])
