@@ -41,9 +41,12 @@ class SL2RLifter:
                 elif saving and not point_is_good:
                     if len(current_arc) > 1:
                         self.SL2R_arcs.append(current_arc)
+                        current_arc = None
                     #elif len(current_arc) == 1:
                     #    print 'skipping', n-1, s
                     saving = False
+            if len(current_arc) > 1:
+                self.SL2R_arcs.append(current_arc)
 
     def find_reps(self):
         self.SL2R_rep_arcs = []
