@@ -1090,7 +1090,7 @@ class PECharVariety:
                 cap = [level.pop(0), level.pop(distances.argmin())]
                 cap.sort(key=lambda a : a[0].real)
                 left, right = cap
-                if .05 < right[0].imag > .45:
+                if .05 < right[0].imag < .45:
                     join = True
                     if right[1].real > right[0].real and left[1].real < left[0].real:
                         right.insert(0, left[0])
