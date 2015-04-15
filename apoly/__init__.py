@@ -302,9 +302,15 @@ class ShapeVector:
     """
     def __init__(self, values):
         self.array = array(values)
-        self.__str__ = self.array.__str__
-        self.__getitem__ = self.array.__getitem__
-        self.__len__ = self.array.__len__
+
+    def __str__(self):
+        return self.array.__str__()
+
+    def __getitem__(self, value):
+        return self.array[value]
+
+    def __len__(self):
+        return len(self.array)
         
     def __eq__(self, other):
         return norm(self.array - other.array) < 1.0E-6
