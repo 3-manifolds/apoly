@@ -160,12 +160,15 @@ def save_all_plots_new():
     import taskdb2
 
     db = taskdb2.TaskDatabase('PEChar')
-    df = db.dataframe('done=1')[:10]
+    df = db.dataframe('done=1')
     pdf_pages = PdfPages('all_plots_new.pdf')
     for i, row in df.iterrows():
-        L = pickle.loads(bz2.decompress(row.lifter))        
-        L = quick_draw(L)
-        L.plot.figure.figure.savefig(pdf_pages, format='pdf')
+        try:
+            L = pickle.loads(bz2.decompress(row.lifter))        
+            L = quick_draw(L)
+            L.plot.figure.figure.savefig(pdf_pages, format='pdf')
+        except:
+            pass
     pdf_pages.close()
     
 #save_all_plots()
