@@ -62,7 +62,7 @@ def make_lifter(name):
     L = SL2RLifter(V)
     return L
 
-def save_data(name, save_holonomizer=False):
+def save_data(name, to_file=True, save_holonomizer=False):
     L = make_lifter(name)
     L.SL2R_rep_arcs=[]
     if save_holonomizer:
@@ -72,8 +72,11 @@ def save_data(name, save_holonomizer=False):
         L.holonomizer.hp_manifold = None
     else:
         L.holonomizer = None
-    file = bz2.BZ2File('lifters/' + name + '.obj.bz2', 'w')
-    pickle.dump(L, file, 2)
+    if to_file:
+        file = bz2.BZ2File('lifters/' + name + '.obj.bz2', 'w')
+        pickle.dump(L, file, 2)
+    else:
+        return bz2.compress(pickle.dumps(L, 2))
 
 def precomputed_lifters():
     return [match[8:-8] for match in glob.glob('lifters/*.obj.bz2')]
