@@ -65,8 +65,7 @@ def make_lifter(name):
 def save_data(name):
     L = make_lifter(name)
     L.SL2R_rep_arcs=[]
-    L.holonomizer=None
-    L.SL2R_arcs = [ [ (p, list(v)) for p, v in arc] for arc in  L.SL2R_arcs]
+    L.holonomizer = None
     file = bz2.BZ2File('lifters/' + name + '.obj.bz2', 'w')
     pickle.dump(L, file)
 

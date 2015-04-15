@@ -74,6 +74,7 @@ class SL2RLifter:
             #print len(arc)
             translations = []
             for sn, rho in arc:
+                rho.translations = None
                 meridian, longitude = rho.polished_holonomy().peripheral_curves()[0]
                 rho_til = rho.lift_on_cusped_manifold()
                 if rho_til is None:
@@ -85,6 +86,7 @@ class SL2RLifter:
                         P = (-P[0], -P[1])
                     translations.append(P)
                     self.translation_dict[sn] = P
+                    rho.translations = P
                 except AssertionError:
                     pass
             self.translation_arcs.append(translations)
