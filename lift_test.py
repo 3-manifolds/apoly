@@ -128,8 +128,12 @@ def in_homological_coordinates(L, num_shifts):
     C = matrix(ZZ, [[1,0], l]).transpose()
     
 def quick_draw(name):
-    L = load_data(name)
-    #add_shifts(L, 2)
+    if isinstance(name, str):
+        L = load_data(name)
+    else:
+        L = name
+        name = name.manifold_name
+        
     L.show()
     try:
         cone(L, Lcone(name))
@@ -143,11 +147,24 @@ def quick_draw(name):
         draw_line(L, slope, color='#A9F5F2')
     return L
 
-def save_all_plots():
+def save_all_plots():    
     from matplotlib.backends.backend_pdf import PdfPages
     pdf_pages = PdfPages('all_plots.pdf')
     for name in precomputed_lifters():
         L = quick_draw(name)
+        L.plot.figure.figure.savefig(pdf_pages, format='pdf')
+    pdf_pages.close()
+
+def save_all_plots_new():    
+    from matplotlib.backends.backend_pdf import PdfPages
+    import taskdb2
+
+    db = taskdb2.TaskDatabase('PEChar')
+    df = db.dataframe('done=1')[:10]
+    pdf_pages = PdfPages('all_plots_new.pdf')
+    for i, row in df.iterrows():
+        L = pickle.loads(bz2.decompress(row.lifter))        
+        L = quick_draw(L)
         L.plot.figure.figure.savefig(pdf_pages, format='pdf')
     pdf_pages.close()
     
