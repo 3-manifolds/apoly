@@ -92,7 +92,7 @@ class SL2RLifter:
             self.translation_arcs.append(translations)
 
     def show(self):
-        plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs ]
+        plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs if len(arc)]
         self.plot = Plot(plotlist, title=self.manifold_name)
 
     def show_slopes(self):

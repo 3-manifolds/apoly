@@ -18,7 +18,7 @@ import traceback
 
 def create_database():
     names = [M.name for M in census_data.cusped_manifolds]
-    taskdb2.create_task_db(names, 'PEChar', overwrite=False)
+    taskdb2.create_task_db(names, 'PEChar', overwrite=True)
     db = taskdb2.TaskDatabase('PEChar')
     db.add_column('lifter', 'blob')
     return db
