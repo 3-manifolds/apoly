@@ -1,6 +1,8 @@
 from apoly import Plot
-from sage.all import RealField, ComplexField, log, pi
+from sage.all import RealField, ComplexField, ZZ, log, pi, vector, matrix
 from manifold_reps.real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
+from snappy.snap.nsagetools import hyperbolic_torsion
+from snappy import CensusKnots
 
 def in_SL2R(H, f, s):
     shape = H.T_fibers[f].shapes[s]
@@ -15,7 +17,8 @@ class SL2RLifter:
     def __init__(self, V):
         self.holonomizer = H = V.holonomizer
         self.degree = H.degree
-        self.manifold_name = V.manifold_name
+        self.order = H.order
+        self.manifold = V.manifold
         self.find_shapes()
         print 'lifting reps'
         self.find_reps()
@@ -27,13 +30,15 @@ class SL2RLifter:
         H = self.holonomizer
         current_arc = None
         for s in range(self.degree):
+            print 'arc %d'%s
             saving = False
-            for n in range(128):
+            for n in range(self.order):
                 try:
                     point_is_good = in_SL2R(H, n, s)
                 except:
                     point_is_good = False
                 if not saving and point_is_good:
+                    print 'starting at %d'%n
                     current_arc = [ ((s,n), H.T_fibers[n].shapes[s]) ]
                     saving = True
                 elif saving and point_is_good:
@@ -42,8 +47,7 @@ class SL2RLifter:
                     if len(current_arc) > 1:
                         self.SL2R_arcs.append(current_arc)
                         current_arc = None
-                    #elif len(current_arc) == 1:
-                    #    print 'skipping', n-1, s
+                        print 'ending at %d'%n
                     saving = False
             if current_arc and len(current_arc) > 1:
                 self.SL2R_arcs.append(current_arc)
@@ -91,9 +95,13 @@ class SL2RLifter:
                     pass
             self.translation_arcs.append(translations)
 
-    def show(self):
-        plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs if len(arc)]
-        self.plot = Plot(plotlist, title=self.manifold_name)
+    def show(self, add_lines=False):
+        plotlist = [ [complex(x,y) for x, y in arc] for arc in self.translation_arcs ]
+        self.plot = Plot(plotlist, title=self.manifold.name())
+        if add_lines:
+            self.draw_line(self.manifold.homological_longitude(), color='green')
+            for edge in self.l_space_edges():
+                self.draw_line(edge, color='red')
 
     def show_slopes(self):
         M = self.holonomizer.manifold.copy()
@@ -109,6 +117,27 @@ class SL2RLifter:
                     slopes.append(None)
             plotlist.append(slopes)
         self.slope_plot = Plot(plotlist)
+
+    def draw_line(self, curve_on_torus, **kwargs):
+        ax = self.plot.figure.axis
+        x = ax.get_xlim()[1]
+        y = ax.get_ylim()[1]
+        a, b = curve_on_torus
+        if b != 0:
+            ax.plot( (0, x), (0, -a*x/b), **kwargs)
+        else:
+            ax.plot( (0, 0), (0, -a*5), **kwargs)
+        self.plot.figure.draw()
+
+    def l_space_edges(self):
+        M = self.manifold
+        K = CensusKnots.identify(M)
+        A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
+        A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
+        Ainv = A**(-1)
+        X = hyperbolic_torsion(M, bits_prec=1000).degree()/2
+        l_space_edges = [vector(ZZ, (X, -1)), vector(ZZ, (X,1))]
+        return [Ainv*v for v in l_space_edges]
 
 def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
     RR = RealField()
