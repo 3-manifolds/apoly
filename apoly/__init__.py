@@ -740,17 +740,32 @@ class Holonomizer:
         self.T_longitude_holos, self.T_longitude_evs = self.longidata(self.T_fibers)
 
     def longidata(self, fiber_list):
+        """Compute the longitude holonomies and eigenvalues at each point in
+        each fiber in the argument.  We allow the list to contain
+        placeholders for failed computations.  A placeholder is any
+        object which is not an instance of Fiber.  The fibers must all
+        have degree == self.degree.
+
+        The method produces two lists of lists.  Each outer list has
+        length self.degree.  The inner lists contain pairs (n,z) where
+        n is the index of the fiber in the input list and z is the
+        associated holonomy or eigenvalue.  The integer can be used to
+        reconstruct the corresponding meridian holonomy or eigenvalue
+        in the case where the list of fibers is the elevation of a
+        sampled circle.
+
+        """
         print 'Computing longitude holonomies and eigenvalues.'
         # This crashes if there are bad fibers.
         longitude_holonomies = [
             [( n, self.L_holo(f.shapes[m]()) ) for n, f in enumerate(fiber_list)
-             if not isinstance(f, int)]
+             if isinstance(f, Fiber)]
             for m in xrange(self.degree)]
         # I tried choosing a random fiber here, and things broke badly.
         # find_shift would get the wrong shift.
 #        if index is None:
 #            index = randint(0,self.order - 1)
-        index = 0 if not isinstance(fiber_list[0], int) else randint(0,self.order - 1)
+        index = 0 if isinstance(fiber_list[0], Fiber) else randint(0,self.order - 1)
         print 'starting index = %d'%index 
         longitude_traces = self.find_longitude_traces(fiber_list[index])
         longitude_eigenvalues = []
@@ -814,7 +829,7 @@ class Holonomizer:
             if max((A*S - matrix(rhs).transpose())%2) > 0:
                 raise RuntimeError, "Mod 2 solver failed!"
             tr = trace(G.SL2C(longitude))
-            if int((L*S)%2):
+            if (L*S)%2 != 0:
                 tr = -tr
             traces.append(tr)
         return traces
