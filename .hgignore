@@ -1,5 +1,7 @@
 syntax: glob
 *.pyc
 base_fibers/*.base
+hints/*
+apolys/*
 slurm_out/*
 slurm_error/
