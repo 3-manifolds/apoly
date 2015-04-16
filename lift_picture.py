@@ -128,6 +128,8 @@ class SL2RLifter:
     def l_space_edges(self):
         M = self.manifold
         K = CensusKnots.identify(M)
+        if not K:
+            return []
         A = M.is_isometric_to(K, True)[0].cusp_maps()[0]
         A = matrix(ZZ,  [[A[0,0], A[0,1]], [A[1,0], A[1,1]]])
         Ainv = A**(-1)
