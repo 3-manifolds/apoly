@@ -28,27 +28,23 @@ class SL2RLifter:
     def find_shapes(self):
         self.SL2R_arcs = []
         H = self.holonomizer
-        current_arc = None
         for s in range(self.degree):
-            print 'arc %d'%s
-            saving = False
+            current_arc = None
             for n in range(self.order):
                 try:
                     point_is_good = in_SL2R(H, n, s)
                 except:
                     point_is_good = False
-                if not saving and point_is_good:
-                    print 'starting at %d'%n
-                    current_arc = [ ((s,n), H.T_fibers[n].shapes[s]) ]
-                    saving = True
-                elif saving and point_is_good:
-                    current_arc.append( ((s,n), H.T_fibers[n].shapes[s]) )
-                elif saving and not point_is_good:
-                    if len(current_arc) > 1:
-                        self.SL2R_arcs.append(current_arc)
+                if point_is_good:
+                    if current_arc:
+                        current_arc.append( ((s,n), H.T_fibers[n].shapes[s]) )
+                    else:
+                        current_arc = [ ((s,n), H.T_fibers[n].shapes[s]) ]
+                else:
+                    if current_arc:
+                        if len(current_arc) > 1:
+                            self.SL2R_arcs.append(current_arc)
                         current_arc = None
-                        print 'ending at %d'%n
-                    saving = False
             if current_arc and len(current_arc) > 1:
                 self.SL2R_arcs.append(current_arc)
 
