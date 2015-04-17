@@ -1,13 +1,20 @@
 from apoly import Plot
+from sage.all import RealField, ComplexField, log, pi
+from manifold_reps.real_reps import (
+    PSL2RRepOf3ManifoldGroup, translation_amount, CouldNotConjugateIntoPSL2R)
 from sage.all import RealField, ComplexField, ZZ, log, pi, vector, matrix
-from manifold_reps.real_reps import PSL2RRepOf3ManifoldGroup, translation_amount
+from manifold_reps.real_reps import (PSL2RRepOf3ManifoldGroup,
+                                     translation_amount, CouldNotConjugateIntoPSL2R)
 from snappy.snap.nsagetools import hyperbolic_torsion
 from snappy import CensusKnots
+
 
 def in_SL2R(H, f, s):
     shape = H.T_fibers[f].shapes[s]
     ev = H.T_longitude_evs[s][f][1]
     if abs(1.0 - abs(ev)) > .00001:
+        return False
+    if not H.has_real_traces(shape):
         return False
     if H.in_SU2(shape):
         return False
@@ -56,14 +63,17 @@ class SL2RLifter:
             for sn,  S in arc:
                 s, n = sn
                 target = -2*RR(pi)*RR(n)/RR(128)
-                rho = PSL2RRepOf3ManifoldGroup(
-                    self.holonomizer.manifold,
-                    target,
-                    S,
-                    precision=1000,
-                    fundamental_group_args = [True, False, True])
-                if rho.polished_holonomy().check_representation() < 1.0e-100:
-                    reps.append( (sn, rho) )
+                try:
+                    rho = PSL2RRepOf3ManifoldGroup(
+                        self.holonomizer.manifold,
+                        target,
+                        S,
+                        precision=1000,
+                        fundamental_group_args = [True, False, True])
+                    if rho.polished_holonomy().check_representation() < 1.0e-100:
+                        reps.append( (sn, rho) )
+                except CouldNotConjugateIntoPSL2R:
+                    print "Skipping rep probably misclassified as PSL(2,R)"
             if len(reps) > 1: 
                 self.SL2R_rep_arcs.append(reps)
 

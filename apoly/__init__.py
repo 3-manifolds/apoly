@@ -846,6 +846,26 @@ class Holonomizer:
         G = self.hp_manifold.fundamental_group()
         return G.O31(word)
 
+    def has_real_traces(self, shape):
+        tolerance = 1.0E-10
+        gens = self.hp_manifold.fundamental_group().generators()
+        gen_mats = [self.SL2C(g, shape) for g in gens]
+        for A in gen_mats:
+            tr = complex(A[0,0] + A[1,1])
+            if abs(tr.imag) > tolerance:
+                return False
+        mats = gen_mats[:]
+        for i in range(1, len(gens) + 1):
+            new_mats = []
+            for A in gen_mats:
+                for B in mats:
+                    C = B*A
+                    tr = complex(C[0,0] + C[1,1])
+                    if abs(tr.imag) > tolerance:
+                        return False
+                    new_mats.append(C)
+        return True
+        
     def in_SU2(self, shape):
         tolerance = 1.0E-5
         gens = self.hp_manifold.fundamental_group().generators()

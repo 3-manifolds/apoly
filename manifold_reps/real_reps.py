@@ -282,8 +282,13 @@ class PSL2RRepOf3ManifoldGroup(PSL2CRepOf3ManifoldGroup):
         M = matrix(ZZ, [euler_cocycle] + D.columns())
         k = M.left_kernel().basis()[0]
         if k[0] != 1:
-            print "Warning, couldn't lift to cusped manifold"
-            return 
+            # Two reasons we could be here: the euler class isn't zero or
+            # the implicit assumption about how left_kernel works is violated.
+            # Only the latter is actually worrysome.
+            if D.elementary_divisors() == M.transpose().elementary_divisors():
+                raise AssertionError('Need better implementation, Nathan')
+            else:
+                return 
         shifts = (-k)[1:]
         good_lifts = [euler.PSL2RtildeElement(rho(g), s)
                       for g, s in zip(rho.generators(), shifts)]
