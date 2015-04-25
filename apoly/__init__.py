@@ -579,6 +579,7 @@ class Holonomizer:
         self.fibrator = PHCFibrator(manifold, radius, saved_base_fiber)
         self.manifold = manifold
         self.hp_manifold = self.manifold.high_precision()
+        self.betti2 = [c % 2 for c in manifold.homology().coefficients].count(0)
         self.base_fiber = self.fibrator.base_fiber
         if not self.base_fiber.is_finite():
             raise RuntimeError, 'The starting fiber contains Tillmann points.'
@@ -827,7 +828,8 @@ class Holonomizer:
             S = matrix(solve_mod2_system(A,rhs)).transpose()
             # Paranoia
             if max((A*S - matrix(rhs).transpose())%2) > 0:
-                raise RuntimeError, "Mod 2 solver failed!"
+                if self.betti2 == 1:
+                    raise RuntimeError, "Mod 2 solver failed!"
             tr = trace(G.SL2C(longitude))
             if (L*S)%2 != 0:
                 tr = -tr
