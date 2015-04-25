@@ -3,8 +3,6 @@ from sage.all import RealField, ComplexField, log, pi
 from manifold_reps.real_reps import (
     PSL2RRepOf3ManifoldGroup, translation_amount, CouldNotConjugateIntoPSL2R)
 from sage.all import RealField, ComplexField, ZZ, log, pi, vector, matrix
-from manifold_reps.real_reps import (PSL2RRepOf3ManifoldGroup,
-                                     translation_amount, CouldNotConjugateIntoPSL2R)
 from snappy.snap.nsagetools import hyperbolic_torsion
 from snappy import CensusKnots
 
