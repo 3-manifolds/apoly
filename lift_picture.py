@@ -3,7 +3,7 @@ from sage.all import RealField, ComplexField, log, pi
 from manifold_reps.real_reps import (
     PSL2RRepOf3ManifoldGroup, translation_amount, CouldNotConjugateIntoPSL2R)
 from sage.all import RealField, ComplexField, ZZ, log, pi, vector, matrix
-from snappy.snap.nsagetools import hyperbolic_torsion
+from snappy.snap.nsagetools import hyperbolic_torsion, MapToFreeAbelianization
 from snappy import CensusKnots
 
 
@@ -24,11 +24,21 @@ class SL2RLifter:
         self.degree = H.degree
         self.order = H.order
         self.manifold = V.manifold
+        self.set_perpheral_translations()
         self.find_shapes()
         print 'lifting reps'
         self.find_reps()
         print 'computing translations'
         self.find_translation_arcs()
+
+    def set_perpheral_translations(self):
+        G = self.manifold.fundamental_group()
+        phi = MapToFreeAbelianization(G)
+        m, l = [phi(w)[0] for w in G.peripheral_curves()[0]]
+        if m < 0:
+            m, l = -m, -l
+        self.m_abelian, self.l_abelian = m, l
+        
 
     def find_shapes(self):
         self.SL2R_arcs = []
@@ -79,7 +89,6 @@ class SL2RLifter:
         self.translation_arcs = []
         self.translation_dict = {}
         for arc in self.SL2R_rep_arcs:
-            #print len(arc)
             translations = []
             for sn, rho in arc:
                 rho.translations = None
@@ -90,8 +99,10 @@ class SL2RLifter:
                 try:
                     P = ( float(translation_amount(rho_til(meridian))),
                           float(translation_amount(rho_til(longitude))) )
-                    if P[0] < 0:
-                        P = (-P[0], -P[1])
+                    while P[0] < 0:
+                        P = (P[0] + self.m_abelian, P[1] + self.l_abelian)
+                    while P[0] > self.m_abelian:
+                        P = (P[0] - self.m_abelian, P[1] - self.l_abelian)
                     translations.append(P)
                     self.translation_dict[sn] = P
                     rho.translations = P
