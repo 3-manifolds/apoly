@@ -20,7 +20,7 @@ def create_database():
     names = [M.name for M in census_data.cusped_manifolds]
     taskdb2.create_task_db(names, 'PEChar', overwrite=True)
     db = taskdb2.TaskDatabase('PEChar')
-    db.add_column('lifter', 'blob')
+    db.add_column('lifter', 'mediumblob')
     return db
 
 def add_lifter(task):
