@@ -132,7 +132,7 @@ def quick_draw(name):
         L = load_data(name)
     else:
         L = name
-        name = name.manifold_name
+        name = name.manifold.name()
         
     L.show()
     try:
@@ -163,12 +163,13 @@ def save_all_plots_new():
     df = db.dataframe('done=1')
     pdf_pages = PdfPages('all_plots_new.pdf')
     for i, row in df.iterrows():
-        try:
-            L = pickle.loads(bz2.decompress(row.lifter))        
-            L = quick_draw(L)
-            L.plot.figure.figure.savefig(pdf_pages, format='pdf')
-        except:
-            pass
+        L = pickle.loads(bz2.decompress(row.lifter))
+        if len(L.translation_arcs):
+            try:
+                L = quick_draw(L)
+                L.plot.figure.figure.savefig(pdf_pages, format='pdf')
+            except:
+                print "Issue with " + row['name']
     pdf_pages.close()
     
 #save_all_plots()
