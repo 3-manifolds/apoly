@@ -4,6 +4,7 @@ try:
     from tkplot import MatplotFigure, Tk, ttk
 except ImportError:
     pass
+from point import PEPoint
 
 class Plot:
     """
@@ -27,12 +28,14 @@ class Plot:
                 self.data = [data]
             duck = self.data[0][0]
             self.type = type(duck)
-            if 'complex' in str(self.type):
-                self.type = 'complex'
-            elif 'float' in str(self.type):
-                self.type = 'float'
-            else:
-                print 'Type is:', self.type
+            # if isinstance(duck, PEPoint):
+            #     self.type = 'PEPoint'
+            # if isinstance(duck, complex):
+            #     self.type = 'complex'
+            # elif isinstance(duck, float):
+            #     self.type = 'float'
+            # else:
+            #     print 'Type is:', self.type
 
         self.start_plotter()
         if len(self.data) > 0:
@@ -94,12 +97,12 @@ class GnuplotPlot(Plot):
         for n in funcs:
             spec.append('"-" t "%d" w %s lw %s'%(n, self.style, self.linewidth))
         gnuplot_input = self.commands + 'plot ' + ', '.join(spec) + '\n'
-        if self.type == 'complex':
+        if self.type == complex:
             for n in funcs:
                 gnuplot_input += '\n'.join([
                     '%f %f'%(point.real, point.imag) if point is not None else ''
                     for point in self.data[n]] + ['e\n']) 
-        elif self.type == 'float':
+        elif self.type == float:
             for n in funcs:
                 gnuplot_input += '\n'.join(
                     ['%f'%float(point) for point in self.data[n]] + ['e\n']) 
@@ -117,7 +120,7 @@ class SagePlot(Plot):
 
         G = Graphics()
         for f in funcs:
-            if self.type == 'complex':
+            if self.type == complex:
                 points = [(d.real, d.imag) for d in self.data[f]]
             else:
                 points = [ (i,d) for i, d in enumerate(self.data[f])]
@@ -225,12 +228,20 @@ class MatplotPlot(Plot):
 
         """
         result = []
-        if self.type == 'complex':
+        if self.type == PEPoint:
+            x_list, y_list = [], [] 
+            for d in data:
+                x_list.append(d.real)
+                y_list.append(d.imag)
+                if d.leave_gap and len(x_list) > 1:
+                    result.append( (x_list, y_list) )
+                    x_list, y_list = [], [] 
+        elif self.type == complex:
             x_list, y_list = [], [] 
             for d in data:
                 if d is None and len(x_list) > 1:
                     result.append( (x_list, y_list) )
-                    x_list, y_list = [], [] 
+                    x_list, y_list =[], []
                 else:
                     x_list.append(d.real)
                     y_list.append(d.imag)
