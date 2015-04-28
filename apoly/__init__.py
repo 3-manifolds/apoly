@@ -23,7 +23,7 @@ snappy.SnapPy.matrix = matrix
 snappy.SnapPyHP.matrix = matrix
 from snappy import *
 from spherogram.graphs import Graph
-
+from point import PEPoint
 #from plot import GnuplotPlot as Plot
 from plot import MatplotPlot as Plot
 global_linewidth=1
@@ -974,7 +974,7 @@ def solve_mod2_system(the_matrix,rhs):
 class PEArc(list):
     """
     A list of pillowcase points lying on an arc of the PECharVariety.
-    Subclasses to allow additional attributes.
+    Subclassed here to allow additional attributes.
     """
 
 class PECharVariety:
@@ -1021,7 +1021,6 @@ class PECharVariety:
             component.sort(key=lambda x : x[0].imag, reverse=True)
             n = len(component)
             while n > 0:
-                print n
                 if component[n][0].imag == component[n-1][0].imag:
                     component[n].insert(0, component[n-1][0])
                     n -= 1
@@ -1059,14 +1058,14 @@ class PECharVariety:
                         if last_L > 0.8 and L < 0.2:   # L became > 1
                             length = 1.0 - last_L + L 
                             interp = ((1.0-last_L)*M_args[n] + L*M_args[n-1])/length
-                            for p in [ 1.0 + interp*1j,  None,  0.0 + interp*1j]:
-                                arc.append(p)
-                        elif last_L < 0.2 and L > 0.8: # L became < 1
+                            arc.append(PEPoint(1.0, interp, leave_gap=True)) 
+                            arc.append(PEPoint(0.0, interp))
+                        elif last_L < 0.2 and L > 0.8: # L became < 0
                             length = last_L + 1.0 - L 
                             interp = (last_L*M_args[n] + (1.0 - L)*M_args[n-1])/length
-                            for p in [0.0 + interp*1j , None, 1.0 + interp*1j]:
-                                arc.append(p)
-                    arc.append( L + 1j*(M_args[n]) )
+                            arc.append(PEPoint(0.0, interp, leave_gap=True))
+                            arc.append(PEPoint(1.0, interp))
+                    arc.append(PEPoint(L,M_args[n]))
                     info.append( (m,n) )
                 else:
                     if len(arc) > 1:
@@ -1098,7 +1097,6 @@ class PECharVariety:
             try:
                 if abs(arc[1] - arc[0]) > 0.25:
                     if arc[0].imag > 0.45 and arc[1].imag  < 0.05 :
-                        print 'top'
                         arc[0] = arc[0] - 0.5j
                     elif arc[0].imag < 0.05 and arc[1].imag > 0.45:
                         arc[0] = arc[0]+ 0.5j
@@ -1138,8 +1136,8 @@ class PECharVariety:
                     if right[1].real > right[0].real and left[1].real < left[0].real:
                         right.insert(0, left[0])
                     elif right[1].real < right[0].real and left[1].real > left[0].real:
-                        right.insert(0, 1.0 + left[0].imag*1j)
-                        left.insert(0, 0.0 + left[0].imag*1j)
+                        right.insert(0, PEPoint(1.0, left[0].imag))
+                        left.insert(0, PEPoint(0.0, left[0].imag))
                     else:
                         join = False
                     if join:
@@ -1165,8 +1163,8 @@ class PECharVariety:
                     if right[-2].real > right[-1].real and left[-2].real < left[-1].real:
                         right.append(left[-1])
                     elif right[-2].real < right[-1].real and left[-2].real > left[-1].real:
-                        right.append(1.0 + left[-1].imag*1j)
-                        left.append(0.0 + left[-1].imag*1j)
+                        right.append(PEPoint(1.0, left[-1].imag))
+                        left.append(PEPoint(0.0, left[-1].imag))
                     else:
                         join = False
                     if join:
