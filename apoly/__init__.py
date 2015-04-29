@@ -1046,13 +1046,16 @@ class PECharVariety:
             for n, ev in track:
                 if (0.99999 < abs(ev) < 1.00001):
                     if show_group:
+                        shape = H.T_fibers[n].shapes[m]
                         try:
-                            if H.in_SU2(H.T_fibers[n].shapes[m]):
+                            if H.in_SU2(shape):
                                 marker = '.'
-                            else:
+                            elif H.has_real_traces(shape):
                                 marker = 'D'
+                            else:
+                                marker = 'x'
                         except:
-                            print 'Exception in SU(2) test.'
+                            print 'Exception in group test.'
                             marker = 'x'
                     L = (log(ev).imag/(2*pi))%1.0
                     if len(arc)>2:  # don't do this near the corners.
