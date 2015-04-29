@@ -1034,7 +1034,7 @@ class PECharVariety:
                     n -= 1
                 n -= 1
 
-    def build_arcs(self, su2_only=False):
+    def build_arcs(self, show_group=False):
         self.arcs = []
         self.arc_info = []
         H = self.holonomizer
@@ -1042,30 +1042,33 @@ class PECharVariety:
         M_args = 0.5 * ( arange(self.order, dtype=float64)*delta_M % 1.0 )
         for m, track in enumerate(self.holonomizer.T_longitude_evs):
             arc, info = PEArc(), []
+            marker = ''
             for n, ev in track:
-                su2_ok = True
-                if su2_only:
-                    try:
-                        su2_ok = H.in_SU2(H.T_fibers[n].shapes[m])
-                    except:
-                        #For now, just throw it in so we can look at it.
-                        print 'Exception in SU_2 test.'
-                        su2_ok = True
-                if (0.99999 < abs(ev) < 1.00001) and su2_ok:
+                if (0.99999 < abs(ev) < 1.00001):
+                    if show_group:
+                        try:
+                            if H.in_SU2(H.T_fibers[n].shapes[m]):
+                                marker = '.'
+                            else:
+                                marker = 'D'
+                        except:
+                            print 'Exception in SU(2) test.'
+                            marker = 'x'
                     L = (log(ev).imag/(2*pi))%1.0
                     if len(arc)>2:  # don't do this near the corners.
                         last_L = arc[-1].real
                         if last_L > 0.8 and L < 0.2:   # L became > 1
                             length = 1.0 - last_L + L 
                             interp = ((1.0-last_L)*M_args[n] + L*M_args[n-1])/length
-                            arc.append(PEPoint(1.0, interp, leave_gap=True)) 
+                            arc.append(PEPoint(1.0, interp, leave_gap=True,
+                                               marker=marker)) 
                             arc.append(PEPoint(0.0, interp))
                         elif last_L < 0.2 and L > 0.8: # L became < 0
                             length = last_L + 1.0 - L 
                             interp = (last_L*M_args[n] + (1.0 - L)*M_args[n-1])/length
                             arc.append(PEPoint(0.0, interp, leave_gap=True))
                             arc.append(PEPoint(1.0, interp))
-                    arc.append(PEPoint(L,M_args[n]))
+                    arc.append(PEPoint(L,M_args[n], marker=marker))
                     info.append( (m,n) )
                 else:
                     if len(arc) > 1:
@@ -1200,8 +1203,8 @@ class PECharVariety:
                 n -= 1
             n -= 1
  
-    def show(self, su2_only=False):
-        self.build_arcs(su2_only)
+    def show(self, show_group=False):
+        self.build_arcs(show_group)
         term = 'aqua' if sys.platform == 'darwin' else 'wxt'
         Plot(self.arcs,
              limits=((0.0, 1.0), (0.0, 0.5)),
@@ -1212,6 +1215,7 @@ class PECharVariety:
              colors = self.colors,
              extra_lines=[((0.5,0.5),(0.0,1.0))],
              extra_line_args={'color':'black', 'linewidth':0.75},
+             show_group=show_group,
              commands="""
                     set terminal %s title "%s" size 1400,700
                     set xrange [0.0:1.0]

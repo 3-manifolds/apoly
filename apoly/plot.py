@@ -5,6 +5,7 @@ try:
 except ImportError:
     pass
 from point import PEPoint
+from collections import defaultdict
 
 class Plot:
     """
@@ -28,15 +29,6 @@ class Plot:
                 self.data = [data]
             duck = self.data[0][0]
             self.type = type(duck)
-            # if isinstance(duck, PEPoint):
-            #     self.type = 'PEPoint'
-            # if isinstance(duck, complex):
-            #     self.type = 'complex'
-            # elif isinstance(duck, float):
-            #     self.type = 'float'
-            # else:
-            #     print 'Type is:', self.type
-
         self.start_plotter()
         if len(self.data) > 0:
             self.show_plots()
@@ -129,8 +121,6 @@ class SagePlot(Plot):
         G.show()
 
 class MatplotPlot(Plot):
-    #def __init__(self, data, **kwargs):
-    #    Plot.__init__(self, data, **kwargs)
          
     def start_plotter(self):
         self.figure = MF = MatplotFigure(add_subplot=False)
@@ -138,13 +128,13 @@ class MatplotPlot(Plot):
         self.arcs = []
         self.arc_vars = collections.OrderedDict()
         groups = dict()
-        for i, data in enumerate(self.data):
+        for i, component in enumerate(self.data):
             color = self.color_dict.get(i, i)
             if color not in groups:
                 groups[color] = []
             arc = groups[color]
-            lists = self.split_data(data)
-            for X, Y in lists:
+            segments = self.split_data(component)
+            for X, Y in segments:
                 # axis.plot returns a list of line2D objects.
                 # we only assign a label to the first thing in each group
                 if len(arc) == 0:
@@ -153,7 +143,16 @@ class MatplotPlot(Plot):
                 else:
                     arc += axis.plot(X, Y, color=self.color(color),
                                      linewidth=self.linewidth)
-                    
+            if self.args['show_group']:
+                point_dict = defaultdict(list)
+                for p in component:
+                    if p.marker:
+                        point_dict[p.marker].append(p)
+                for marker in point_dict:
+                    arc.append(axis.scatter([p.real for p in point_dict[marker]],
+                                            [p.imag for p in point_dict[marker]],
+                                            c=self.color(color), marker=marker))
+                                    
         for color in groups:
             var = Tk.BooleanVar(MF.window, value=True)
             var.trace('w', self.arc_button_callback)
@@ -228,16 +227,15 @@ class MatplotPlot(Plot):
 
         """
         result = []
+        x_list, y_list = [], []
         if self.type == PEPoint:
-            x_list, y_list = [], [] 
             for d in data:
                 x_list.append(d.real)
                 y_list.append(d.imag)
                 if d.leave_gap and len(x_list) > 1:
                     result.append( (x_list, y_list) )
-                    x_list, y_list = [], [] 
+                    x_list, y_list = [], []
         elif self.type == complex:
-            x_list, y_list = [], [] 
             for d in data:
                 if d is None and len(x_list) > 1:
                     result.append( (x_list, y_list) )
@@ -246,7 +244,6 @@ class MatplotPlot(Plot):
                     x_list.append(d.real)
                     y_list.append(d.imag)
         else:
-            x_list, y_list = [], [] 
             for n, d in enumerate(data):
                 if d is None and len(x_list) > 1:
                     result.append( (x_list, y_list) )
