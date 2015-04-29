@@ -143,7 +143,7 @@ class MatplotPlot(Plot):
                 else:
                     arc += axis.plot(X, Y, color=self.color(color),
                                      linewidth=self.linewidth)
-            if self.args['show_group']:
+            if self.args.get('show_group', False):
                 point_dict = defaultdict(list)
                 for p in component:
                     if p.marker:

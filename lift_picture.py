@@ -24,21 +24,20 @@ class SL2RLifter:
         self.degree = H.degree
         self.order = H.order
         self.manifold = V.manifold
-        self.set_perpheral_translations()
+        self.set_peripheral_info()
         self.find_shapes()
         print 'lifting reps'
         self.find_reps()
         print 'computing translations'
         self.find_translation_arcs()
 
-    def set_perpheral_translations(self):
+    def set_peripheral_info(self):
         G = self.manifold.fundamental_group()
         phi = MapToFreeAbelianization(G)
         m, l = [phi(w)[0] for w in G.peripheral_curves()[0]]
         if m < 0:
             m, l = -m, -l
         self.m_abelian, self.l_abelian = m, l
-        
 
     def find_shapes(self):
         self.SL2R_arcs = []
@@ -155,6 +154,12 @@ class SL2RLifter:
         X = hyperbolic_torsion(M, bits_prec=1000).degree()/2
         l_space_edges = [vector(ZZ, (X, -1)), vector(ZZ, (X,1))]
         return [Ainv*v for v in l_space_edges]
+
+
+class SL2RLifterHomological(SL2RLifter):
+    def __init__(self, V):
+        SL2RLifter.__init__(self, V) 
+    
 
 def lifted_slope(M,  target_meridian_holonomy_arg, shapes):
     RR = RealField()
