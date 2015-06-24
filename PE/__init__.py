@@ -78,9 +78,10 @@ class GluingSystem:
     the meridian holonomy (i.e. the first eigenvalue squared).
     """
     def __init__(self, manifold):
+        assert manifold.num_cusps() == 1, 'Manifold must be one-cusped.'
         self.manifold = manifold.copy()
         eqns = manifold.gluing_equations('rect')
-        # drop the last edge equation (Only works for 1-cusped manifolds)
+        # drop the last edge equation
         self.glunomials = [Glunomial(A, B, c) for A, B, c in eqns[:-3]]
         self.M_nomial, self.L_nomial = [Glunomial(A, B, c) for A,B,c in eqns[-2:]]
         self.glunomials.append(self.M_nomial)
@@ -259,7 +260,8 @@ class ShapeVector:
     Instantiate with a sequence of complex numbers.  To access
     the underlying array, call as a function.
     """
-    def __init__(self, values, tolerance=1.0E-6):
+    def __init__(self, manifold, values, tolerance=1.0E-6):
+        self.hp_manifold = manifold.high_precision()
         self.array = array(values)
 
     def __str__(self):
@@ -289,7 +291,84 @@ class ShapeVector:
                  (moduli < 1.0E-6).any() or
                  (moduli > 1.0E6).any()
                  )
+
+    def SL2C(self, word):
+        self.hp_manifold.set_tetrahedra_shapes(self(), None, [(0,0)])
+        G = self.hp_manifold.fundamental_group()
+        return G.SL2C(word)
+
+    def O31(self, word):
+        self.hp_manifold.set_tetrahedra_shapes(self(), None, [(0,0)])
+        G = self.hp_manifold.fundamental_group()
+        return G.O31(word)
+
+    def has_real_traces(self):
+        tolerance = 1.0E-10
+        gens = self.hp_manifold.fundamental_group().generators()
+        gen_mats = [self.SL2C(g) for g in gens]
+        for A in gen_mats:
+            tr = complex(A[0,0] + A[1,1])
+            if abs(tr.imag) > tolerance:
+                return False
+        mats = gen_mats[:]
+        for i in range(1, len(gens) + 1):
+            new_mats = []
+            for A in gen_mats:
+                for B in mats:
+                    C = B*A
+                    tr = complex(C[0,0] + C[1,1])
+                    if abs(tr.imag) > tolerance:
+                        return False
+                    new_mats.append(C)
+        return True
+        
+    def in_SU2(self):
+        tolerance = 1.0E-5
+        gens = self.hp_manifold.fundamental_group().generators()
+        # Check that all generators have real trace in [-2,2]
+        for X in [self.SL2C(g) for g in gens]:
+            tr = complex(X[0,0] + X[1,1])
+            if abs(tr.imag) > tolerance:
+#                print 'trace not real'
+                return False
+            if abs(tr.real) > 2.0:
+#                print 'trace not in [-2,2]'
+                return False
+        # Get O31 matrix generators
+        o31matrices = [real_array(array(self.O31(g))) for g in gens]
+        # Take the first two
+        A, B = o31matrices[:2]
+        # find their axes
+        M = matrix(zeros((4,4)))
+        u, s, v = svd(A - eye(4))
+        vt = transpose(v)
+        M[:,[0,1]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
+        u, s, v = svd(B - eye(4))
+        vt = transpose(v)
+        M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
+        # Check if the axes cross, and find the fixed point (i.e. Minkwoski line)
+        u, s, v = svd(M)
+        vt = transpose(v)
+        rel = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
+        if rel.shape != (4,1):
+#            print 'linear algebra failure'
+            return False
+        # We have two descriptions -- average them
+        rel[2] = -rel[2]
+        rel[3] = -rel[3]
+        fix = M*rel
+        # check if the fixed line is in the light cone
+        if abs(fix[0]) <= norm(fix[1:]):
+#            print 'fixed line is not in the light cone'
+            return False
+        # check if all generators fix the same point
+        for O in o31matrices:
+            if norm(O*fix - fix) > tolerance:
+#                print 'some generators do not share the fixed point.'
+                return False
+        return True
     
+
 class Fiber:
     """
     A fiber for the rational function [holonomy of the meridian]
@@ -297,14 +376,16 @@ class Fiber:
     Manages a single PHCSytem with a complete solution set.  Can
     be initialized with a list of PHCsolutions.
     """
-    def __init__(self, H_meridian, PHCsystem=None,
+    def __init__(self, manifold, H_meridian, PHCsystem=None,
                  solutions=None, tolerance=1.0E-05):
+        self.hp_manifold = manifold.high_precision()
         # Here the tolerance is used to determine which of the PHC solutions
         # are at infinity.
         self.H_meridian = H_meridian
         self.tolerance = tolerance
         if solutions:
-            self.shapes = [ShapeVector(s) for s in solutions]
+            self.shapes = [ShapeVector(self.hp_manifold, S)
+                           for S in solutions]
         self.system = PHCsystem
         if self.system:
             self.extract_info()
@@ -313,10 +394,12 @@ class Fiber:
         N = self.system.num_variables()/2
         self.solutions = self.system.solution_list(tolerance=self.tolerance)
         # We only keep the "X" variables.
-        self.shapes = [ShapeVector(S.point[:N]) for S in self.solutions]
+        self.shapes = [ShapeVector(self.hp_manifold, S.point[:N])
+                       for S in self.solutions]
 
     def __repr__(self):
-        return 'Fiber(%s,\nsolutions=%s\n)'%(
+        return "Fiber(ManifoldHP('%s'),\n%s,\nsolutions=%s\n)"%(
+            repr(self.hp_manifold),
             repr(self.H_meridian),
             repr([list(x) for x in self.shapes]).replace('],','],\n')
             )
@@ -432,7 +515,7 @@ class PHCFibrator:
             self.base_system = self.parametrized_system.start(
                 self.target, self.tolerance)
             print 'done. (%s seconds)'%(time.time() - begin)
-            self.base_fiber = Fiber(self.target, self.base_system)
+            self.base_fiber = Fiber(self.manifold, self.target, self.base_system)
             if saved_base_fiber:
                 datafile = open(saved_base_fiber, 'w')
                 datafile.write(repr(self.base_fiber))
@@ -498,7 +581,7 @@ class PHCFibrator:
         """
         target_system = self.parametrized_system.transport(
             start_fiber.system, target_holonomy, allow_collisions)
-        return Fiber(target_holonomy, target_system)
+        return Fiber(start_fiber.hp_manifold, target_holonomy, target_system)
 
     def transport2(self, start_fiber, target_holonomy, allow_collisions=False,
                    debug=False):
@@ -516,7 +599,8 @@ class PHCFibrator:
                                               dT=dT,
                                               debug=debug)
                 solutions.append(Zn)
-            result = Fiber(target_holonomy, solutions=solutions)
+            result = Fiber(start_fiber.hp_manifold, target_holonomy,
+                           solutions=solutions)
             if result.collision():
                 dT *= 0.5
             else:
@@ -736,84 +820,6 @@ class Holonomizer:
             traces.append(tr)
         return traces
 
-    def SL2C(self, word, shape):
-        S = shape()
-        self.hp_manifold.set_tetrahedra_shapes(S, None, [(0,0)])
-        G = self.hp_manifold.fundamental_group()
-        return G.SL2C(word)
-
-    def O31(self, word, shape):
-        S = shape()
-        self.hp_manifold.set_tetrahedra_shapes(S, None, [(0,0)])
-        G = self.hp_manifold.fundamental_group()
-        return G.O31(word)
-
-    def has_real_traces(self, shape):
-        tolerance = 1.0E-10
-        gens = self.hp_manifold.fundamental_group().generators()
-        gen_mats = [self.SL2C(g, shape) for g in gens]
-        for A in gen_mats:
-            tr = complex(A[0,0] + A[1,1])
-            if abs(tr.imag) > tolerance:
-                return False
-        mats = gen_mats[:]
-        for i in range(1, len(gens) + 1):
-            new_mats = []
-            for A in gen_mats:
-                for B in mats:
-                    C = B*A
-                    tr = complex(C[0,0] + C[1,1])
-                    if abs(tr.imag) > tolerance:
-                        return False
-                    new_mats.append(C)
-        return True
-        
-    def in_SU2(self, shape):
-        tolerance = 1.0E-5
-        gens = self.hp_manifold.fundamental_group().generators()
-        # Check that all generators have real trace in [-2,2]
-        for S in [self.SL2C(g, shape) for g in gens]:
-            tr = complex(S[0,0] + S[1,1])
-            if abs(tr.imag) > tolerance:
-#                print 'trace not real'
-                return False
-            if abs(tr.real) > 2.0:
-#                print 'trace not in [-2,2]'
-                return False
-        # Get O31 matrix generators
-        o31matrices = [real_array(array(self.O31(g, shape))) for g in gens]
-        # Take the first two
-        A, B = o31matrices[:2]
-        # find their axes
-        M = matrix(zeros((4,4)))
-        u, s, v = svd(A - eye(4))
-        vt = transpose(v)
-        M[:,[0,1]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
-        u, s, v = svd(B - eye(4))
-        vt = transpose(v)
-        M[:,[2,3]] = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
-        # Check if the axes cross, and find the fixed point (i.e. Minkwoski line)
-        u, s, v = svd(M)
-        vt = transpose(v)
-        rel = vt[:,[n for n in range(4) if abs(s[n]) < tolerance]]
-        if rel.shape != (4,1):
-#            print 'linear algebra failure'
-            return False
-        # We have two descriptions -- average them
-        rel[2] = -rel[2]
-        rel[3] = -rel[3]
-        fix = M*rel
-        # check if the fixed line is in the light cone
-        if abs(fix[0]) <= norm(fix[1:]):
-#            print 'fixed line is not in the light cone'
-            return False
-        # check if all generators fix the same point
-        for O in o31matrices:
-            if norm(O*fix - fix) > tolerance:
-#                print 'some generators do not share the fixed point.'
-                return False
-        return True
-    
     def show_R_longitude_evs(self):
         R_plot = Plot([[x for n,x in track] for track in self.R_longitude_evs])
 
@@ -880,7 +886,7 @@ class PEArc(list):
 
 class PECharVariety:
     def __init__(self, mfld, order=128, radius=1.02,
-                 holonomizer=None, base_dir='base_fibers', hint_dir='hints'):
+                 holonomizer=None, base_dir='PE_base_fibers', hint_dir='hints'):
         if isinstance(mfld, Manifold):
             self.manifold = mfld
             self.manifold_name = mfld.name()
@@ -915,9 +921,9 @@ class PECharVariety:
                     if show_group:
                         shape = H.T_fibers[n].shapes[m]
                         try:
-                            if H.in_SU2(shape):
+                            if shape.in_SU2():
                                 marker = '.'
-                            elif H.has_real_traces(shape):
+                            elif shape.has_real_traces():
                                 marker = 'D'
                             else:
                                 marker = 'x'
