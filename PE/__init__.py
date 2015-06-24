@@ -379,7 +379,7 @@ class Fiber:
     def __init__(self, manifold, H_meridian, PHCsystem=None,
                  solutions=None, tolerance=1.0E-05):
         self.hp_manifold = manifold.high_precision()
-        # Here the tolerance is used to determine which of the PHC solutions
+        # The tolerance is used to determine which of the PHC solutions
         # are at infinity.
         self.H_meridian = H_meridian
         self.tolerance = tolerance
@@ -478,6 +478,9 @@ class Fiber:
             result.append( (m, n) )
             target.remove(n)
         return result
+
+
+
 
 class PHCFibrator:
     """
