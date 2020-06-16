@@ -1,4 +1,3 @@
-syntax: glob
 *.pyc
 base_fibers/*.base
 hints/*
